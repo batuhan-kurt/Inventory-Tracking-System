@@ -1,0 +1,45 @@
+# Sanal ortamı (ai_ortami_v2) dahil etme — 400MB+ gereksiz
+ai_ortami_v2/
+ai_ortami*/
+venv/
+.venv/
+env/
+
+# Büyük veri dosyaları — GitHub 100MB limitini aşar
+X_verileri.npy
+Y_etiketler.npy
+
+# Eğitilmiş model — büyük dosya, Git LFS gerektirir
+# (İstersen Git LFS ile yükleyebilirsin, şimdilik hariç)
+akilli_dolap_beyni.keras
+
+# Dataset klasörleri — binlerce görüntü, repo'yu şişirir
+dataset/
+dataset_dengeli/
+test_grubu/
+
+# Geçici ve debug dosyaları
+debug_kesilen_*.jpg
+gecici_esp32.jpg
+dolap_oncesi.jpg
+dolap_sonrasi.jpg
+test_resmi.jpeg
+
+# Kişisel / özel dosyalar
+Gecmis_Sohbet_Kaydi.md
+
+# macOS sistem dosyası
+.DS_Store
+
+# Python cache
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# Streamlit cache
+.streamlit/
+
+# IDE
+.vscode/
+.idea/

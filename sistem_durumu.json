@@ -1,0 +1,21 @@
+{
+  "stok": {
+    "CocaCola_Klasik": 8,
+    "CocaCola_Zero": 4,
+    "Pepsi": 6,
+    "Fanta": 6,
+    "RedBull_Klasik": 10,
+    "RedBull_White": 5,
+    "RedBull_Blue": 6,
+    "RedBull_Lilac": 4,
+    "RedBull_Pembe": 7,
+    "Nescafe_Klasik": 12
+  },
+  "son_olay": {
+    "zaman": "00:00:00",
+    "agirlik_degisimi": 0,
+    "yapilan_islem": "Sistem Başlatıldı (11 Kategori)",
+    "kategori": "-",
+    "eminlik": 0.0
+  }
+}

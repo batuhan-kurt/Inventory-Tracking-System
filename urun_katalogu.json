@@ -1,0 +1,12 @@
+{
+    "CocaCola_Klasik": {"fiyat": 25.0, "baslangic_stok": 40, "kritik_esik": 8},
+    "CocaCola_Zero": {"fiyat": 25.0, "baslangic_stok": 35, "kritik_esik": 8},
+    "Pepsi": {"fiyat": 24.0, "baslangic_stok": 30, "kritik_esik": 6},
+    "Fanta": {"fiyat": 22.0, "baslangic_stok": 25, "kritik_esik": 5},
+    "RedBull_Klasik": {"fiyat": 40.0, "baslangic_stok": 30, "kritik_esik": 5},
+    "RedBull_White": {"fiyat": 42.0, "baslangic_stok": 20, "kritik_esik": 3},
+    "RedBull_Blue": {"fiyat": 42.0, "baslangic_stok": 15, "kritik_esik": 3},
+    "RedBull_Lilac": {"fiyat": 42.0, "baslangic_stok": 15, "kritik_esik": 3},
+    "RedBull_Pembe": {"fiyat": 42.0, "baslangic_stok": 15, "kritik_esik": 3},
+    "Nescafe_Klasik": {"fiyat": 15.0, "baslangic_stok": 50, "kritik_esik": 10}
+}
