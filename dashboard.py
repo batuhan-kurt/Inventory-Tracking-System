@@ -521,7 +521,7 @@ def draw_stok():
             margin=dict(t=0, b=0, l=0, r=0)
         )
         fig.update_traces(textposition='inside', textinfo='percent+label', textfont_size=15, textfont_color="#ffffff", textfont_family="'Inter', 'Helvetica Neue', sans-serif")
-        st.plotly_chart(fig, use_container_width=True)
+        st.plotly_chart(fig, width='stretch')
 
 def draw_siparis():
     render_mobile_ui("🛒", "Sipariş Gerekenler" if secilen_dil == "TR" else "Items Needing Order", f"{len([x for x in liste_siparis if 'yok' not in x and 'No items' not in x])} Ürün" if secilen_dil == "TR" else f"{len([x for x in liste_siparis if 'yok' not in x and 'No items' not in x])} Items", "Stok seviyesine göre sipariş edilmesi gereken ürünler." if secilen_dil == "TR" else "Items to be ordered based on current burn rate.", liste_siparis, system_note_text, yorum_siparis, detail_btn_text)
@@ -558,7 +558,7 @@ def draw_trend():
             coloraxis_showscale=False
         )
         fig_bar.update_traces(textfont_size=16, textfont_family="'Inter', 'Helvetica Neue', sans-serif", textangle=0, textposition="outside", cliponaxis=False)
-        st.plotly_chart(fig_bar, use_container_width=True)
+        st.plotly_chart(fig_bar, width='stretch')
 
 
 # ==========================================
