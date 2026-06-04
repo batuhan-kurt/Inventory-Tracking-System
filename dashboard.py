@@ -5,6 +5,7 @@ import time
 import os
 import plotly.express as px
 from datetime import datetime
+import fuzzy_engine as fe
 
 # ==========================================
 # AYARLAR VE CSS (Ortak Tasarım)
@@ -354,6 +355,12 @@ st.sidebar.markdown("**Dil / Language**")
 secilen_dil = st.sidebar.radio("Dil", ["TR", "EN"], horizontal=True, label_visibility="collapsed")
 st.sidebar.markdown("---")
 
+st.sidebar.markdown("**Sayfa / Page**" if secilen_dil == "TR" else "**Page**")
+secilen_sayfa = st.sidebar.radio("Sayfa", 
+                                ["📊 Ana Dashboard", "🧠 Akıllı Tahminler"] if secilen_dil == "TR" else ["📊 Main Dashboard", "🧠 Smart Predictions"], 
+                                label_visibility="collapsed")
+st.sidebar.markdown("---")
+
 st.sidebar.markdown("**Arayüz / Interface**")
 arayuz_tipi = st.sidebar.radio(
     "Arayüz", 
@@ -410,6 +417,59 @@ df_satis = df_gecmis[df_gecmis['Islem'] == "Alındı"].copy()
 dolap_acilma_sayisi = len(df_gecmis)
 
 # ==========================================
+# FUZZY ENGINE — VERİ HAZIRLIĞI
+# ==========================================
+_now = pd.Timestamp.now()
+_saat = _now.hour
+
+# Son 1 saatte kapı açılımı (fuzzy kapı analizi için)
+_acilma_son1saat = 0
+if not df_gecmis_ham.empty:
+    _son1saat_df = df_gecmis_ham[df_gecmis_ham['Tarih'] >= (_now - pd.Timedelta(hours=1))]
+    _acilma_son1saat = len(_son1saat_df)
+
+# Ürün bazında saatlik tüketim hızı (son 24 saat)
+_tuketim_saatlik = {}
+if not df_gecmis_ham.empty:
+    _son24 = df_gecmis_ham[
+        (df_gecmis_ham['Tarih'] >= (_now - pd.Timedelta(hours=24))) &
+        (df_gecmis_ham['Islem'].str.contains('Al', na=False))
+    ]
+    _sayim = _son24.groupby('Urun').size()
+    for _u in durum['stok']:
+        _tuketim_saatlik[_u] = float(_sayim.get(_u, 0)) / 24.0
+else:
+    for _u in durum['stok']:
+        _tuketim_saatlik[_u] = 0.0
+
+# Tüm ürünler için fuzzy analiz
+_fuzzy_urun = []
+for _urun, _stok in durum['stok'].items():
+    _bas = katalog.get(_urun, {}).get('baslangic_stok', 20)
+    _sonuc = fe.urun_analiz(_urun, _stok, _bas, _tuketim_saatlik.get(_urun, 0.0), dil=secilen_dil)
+    _fuzzy_urun.append(_sonuc)
+
+# Sekme bazlı fuzzy özetleri
+_fz_kapi    = fe.kapi_analiz(_acilma_son1saat, _saat, dil=secilen_dil)
+_fz_stok    = fe.stok_tab_analiz(_fuzzy_urun, dil=secilen_dil)
+_fz_siparis = fe.siparis_tab_analiz(_fuzzy_urun, dil=secilen_dil)
+
+# Trend analizi için veriler
+_satis_7gun = 0
+_satis_3gun = 0
+if not df_gecmis_ham.empty:
+    _s7 = df_gecmis_ham[
+        (df_gecmis_ham['Tarih'] >= (_now - pd.Timedelta(days=7))) &
+        (df_gecmis_ham['Islem'].str.contains('Al', na=False))
+    ]
+    _s3 = df_gecmis_ham[
+        (df_gecmis_ham['Tarih'] >= (_now - pd.Timedelta(days=3))) &
+        (df_gecmis_ham['Islem'].str.contains('Al', na=False))
+    ]
+    _satis_7gun = len(_s7)
+    _satis_3gun = len(_s3)
+
+# ==========================================
 # CANLI BİLDİRİM AKIŞI (TİCKER)
 # ==========================================
 if not df_gecmis_ham.empty:
@@ -437,14 +497,19 @@ gunler_en = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday",
 gun_isimleri = gunler_tr if secilen_dil == "TR" else gunler_en
 
 liste_acilis = []
-yorum_acilis = "-"
 if not df_gecmis.empty:
     df_gecmis['Gun_Index'] = df_gecmis['Tarih'].dt.dayofweek
     gunluk_veri = df_gecmis['Gun_Index'].value_counts().sort_index()
     en_yogun_gun_idx = gunluk_veri.idxmax() if not gunluk_veri.empty else 0
     for idx, count in gunluk_veri.items():
         liste_acilis.append(f"{gun_isimleri[idx]}: {count}")
-    yorum_acilis = f"{gun_isimleri[en_yogun_gun_idx]} günü kullanım zirve yaptığı için satış yoğunluğu ile ilişkilendirilebilir." if secilen_dil == "TR" else f"Peak usage on {gun_isimleri[en_yogun_gun_idx]} correlates directly with sales volume."
+
+# Fuzzy kapı yorum kutusu
+_kapi_badge = fe.badge_html(_fz_kapi['yogunluk_seviyesi'], _fz_kapi['renk'], dil=secilen_dil)
+yorum_acilis = fe.yorum_kutusu(
+    f"🧠 {'Bulanık Analiz' if secilen_dil == 'TR' else 'Fuzzy Analytics'} &nbsp; {_kapi_badge}",
+    _fz_kapi['aciklama']
+)
 
 # 2. Stok Modülü
 toplam_stok = sum(durum['stok'].values())
@@ -456,11 +521,17 @@ for urun, stok in durum['stok'].items():
     if urun in katalog and stok <= katalog[urun]['kritik_esik']:
         kritik_var = True
     liste_stok.append(f"{isim}: {stok} adet" if secilen_dil == "TR" else f"{isim}: {stok} units")
-    pie_data.append({"Ürün": isim, "Stok": stok})
+    pie_data.append({"Ürün": isim, "Stok": stok, "Orijinal": urun})
 
-yorum_stok = "Stok seviyesi genel olarak yeterli, ancak bazı ürünler kritik seviyeye yaklaşıyor." if secilen_dil == "TR" else "Stock levels are generally sufficient, but some items are approaching critical levels."
-if not kritik_var:
-    yorum_stok = "Tüm ürünlerin stok durumu ideal seviyede." if secilen_dil == "TR" else "All products are at ideal stock levels."
+# Fuzzy stok yorum kutusu
+_stok_badge = ""
+if _fz_stok['en_kritik']:
+    _ek = _fz_stok['en_kritik']
+    _stok_badge = fe.badge_html(_ek['seviye'], _ek['renk'], _ek['skor'], dil=secilen_dil)
+yorum_stok = fe.yorum_kutusu(
+    f"🧠 {'Bulanık Analiz' if secilen_dil == 'TR' else 'Fuzzy Analytics'} &nbsp; {_stok_badge}",
+    _fz_stok['aciklama']
+)
 
 # 3. Sipariş Modülü
 liste_siparis = []
@@ -474,10 +545,16 @@ for urun, detay in katalog.items():
     elif mevcut <= detay['kritik_esik'] + 3:
         liste_siparis.append(f"{isim}: Hafta sonuna bitebilir" if secilen_dil == "TR" else f"{isim}: May run out soon")
 
-yorum_siparis = "Sipariş verilmezse hafta sonuna doğru bazı raflarda boşluk oluşabilir." if secilen_dil == "TR" else "Empty shelves are likely by weekend if restocking is not planned."
+# Fuzzy sipariş yorum kutusu
 if not liste_siparis:
     liste_siparis = ["Sipariş gereken ürün yok." if secilen_dil == "TR" else "No items need ordering."]
-    yorum_siparis = "Şu anda herhangi bir siparişe gerek duyulmuyor." if secilen_dil == "TR" else "No immediate restocking required."
+_sp_sev = ("KRİTİK" if secilen_dil == "TR" else "CRITICAL") if _fz_siparis['kritik_sayisi'] > 0 else (("ORTA" if secilen_dil == "TR" else "MEDIUM") if _fz_siparis['orta_sayisi'] > 0 else ("DÜŞÜK" if secilen_dil == "TR" else "LOW"))
+_sp_renk = "#dc2626" if _fz_siparis['kritik_sayisi'] > 0 else ("#ca8a04" if _fz_siparis['orta_sayisi'] > 0 else "#16a34a")
+_siparis_badge = fe.badge_html(_sp_sev, _sp_renk, dil=secilen_dil)
+yorum_siparis = fe.yorum_kutusu(
+    f"🧠 {'Bulanık Analiz' if secilen_dil == 'TR' else 'Fuzzy Analytics'} &nbsp; {_siparis_badge}",
+    _fz_siparis['aciklama']
+)
 
 # 4. Trend Modülü
 if not df_satis.empty:
@@ -489,19 +566,70 @@ if not df_satis.empty:
     gun_adi = gun_isimleri[en_yogun_gun]
     df_en_cok['Saat'] = df_en_cok['Tarih'].dt.hour
     en_yogun_saat = df_en_cok['Saat'].mode()[0]
-    
     liste_trend = [
         f"Toplam satış: {satis_adeti} adet" if secilen_dil == "TR" else f"Total sales: {satis_adeti} units",
         f"En yoğun gün: {gun_adi}" if secilen_dil == "TR" else f"Peak day: {gun_adi}",
         f"En yoğun saat: {en_yogun_saat}:00 - {en_yogun_saat+2}:00" if secilen_dil == "TR" else f"Peak hours: {en_yogun_saat}:00 - {en_yogun_saat+2}:00",
-        f"Tüketim Hızı: Yüksek" if secilen_dil == "TR" else "Burn Rate: High"
     ]
-    yorum_trend = "Bu ürün için ekstra stok planlaması yapılması önerilir." if secilen_dil == "TR" else "Extra stock planning is highly recommended for this product."
     baslik_trend = en_cok_satan.replace("_", " ")
+    # Fuzzy trend analizi
+    _fz_trend = fe.trend_tab_analiz(_satis_7gun, _satis_3gun, en_cok_satan, int(satis_adeti), dil=secilen_dil)
 else:
     liste_trend = ["Seçili zaman aralığında veri yok" if secilen_dil == "TR" else "No data for selected time"]
-    yorum_trend = "-"
     baslik_trend = "Bilinmiyor" if secilen_dil == "TR" else "Unknown"
+    _fz_trend = {"ivme_seviyesi": "VERİ YOK" if secilen_dil=="TR" else "NO DATA", "renk": "#64748b", "aciklama": "Trend analizi için satış verisi gereklidir." if secilen_dil=="TR" else "Sales data required for trend analytics."}
+
+# Fuzzy trend yorum kutusu
+_trend_badge = fe.badge_html(_fz_trend['ivme_seviyesi'], _fz_trend['renk'], dil=secilen_dil)
+yorum_trend = fe.yorum_kutusu(
+    f"🧠 {'Bulanık Analiz' if secilen_dil == 'TR' else 'Fuzzy Analytics'} &nbsp; {_trend_badge}",
+    _fz_trend['aciklama']
+)
+
+# ==========================================
+# DONANIM DURUMU & EXPORT (SIDEBAR)
+# ==========================================
+st.sidebar.markdown("---")
+st.sidebar.markdown("**⚙️ Donanım Durumu**" if secilen_dil == "TR" else "**⚙️ Hardware Status**")
+
+import time
+def check_sensor(filepath, name_tr, name_en):
+    if os.path.exists(filepath):
+        mtime = os.path.getmtime(filepath)
+        age_hours = (time.time() - mtime) / 3600
+        if age_hours > 24:
+            status = "Uyku Modu 🟡" if secilen_dil == "TR" else "Standby 🟡"
+            color = "#ca8a04"
+        else:
+            status = "Aktif 🟢" if secilen_dil == "TR" else "Online 🟢"
+            color = "#16a34a"
+    else:
+        status = "Bağlantı Yok 🔴" if secilen_dil == "TR" else "Offline 🔴"
+        color = "#dc2626"
+    
+    label = name_tr if secilen_dil == "TR" else name_en
+    return f"<div style='display:flex; justify-content:space-between; margin-bottom:5px; font-size:13px; color:#cbd5e1;'><span>{label}:</span> <strong style='color:{color}'>{status}</strong></div>"
+
+hw_html = "<div style='background: rgba(15, 23, 42, 0.6); border: 1px solid rgba(56, 189, 248, 0.2); padding: 10px; border-radius: 12px; margin-bottom: 15px;'>"
+hw_html += check_sensor(RESIM_YOLU, "Kamera (ESP32)", "Camera (ESP32)")
+hw_html += check_sensor(JSON_DURUM, "Load Cell (Tartı)", "Load Cell Sensors")
+hw_html += check_sensor(CSV_GECMIS, "Veritabanı API", "Database API")
+hw_html += "</div>"
+st.sidebar.markdown(hw_html, unsafe_allow_html=True)
+
+st.sidebar.markdown("**📥 Rapor Çıktısı / Export**" if secilen_dil == "TR" else "**📥 Export Report**")
+csv_lines = ["Urun_Adi,Mevcut_Stok,Fuzzy_Skoru,Aciliyet_Seviyesi\n"]
+for u in _fuzzy_urun:
+    csv_lines.append(f"{u['urun']},{u['stok']},{u['skor']},{u['seviye']}\n")
+csv_data = "".join(csv_lines)
+
+st.sidebar.download_button(
+    label="⬇️ CSV İndir" if secilen_dil == "TR" else "⬇️ Download CSV",
+    data=csv_data.encode('utf-8-sig'),
+    file_name=f"smart_fridge_report_{datetime.now().strftime('%Y%m%d_%H%M')}.csv",
+    mime="text/csv",
+    use_container_width=True
+)
 
 
 # ==========================================
@@ -509,19 +637,126 @@ else:
 # ==========================================
 def draw_acilis():
     render_mobile_ui("🚪", "Açılıp Kapanma Sayısı" if secilen_dil == "TR" else "Door Open Count", f"{dolap_acilma_sayisi} Kez" if secilen_dil == "TR" else f"{dolap_acilma_sayisi} Times", "Filtrelenen zaman aralığındaki açılış sayısı." if secilen_dil == "TR" else "Door accesses in the filtered time frame.", liste_acilis, system_note_text, yorum_acilis, detail_btn_text)
+    
+    # ------------------ SAATLİK YOĞUNLUK GRAFİĞİ ------------------
+    if not df_gecmis.empty:
+        baslik_tr = f"Saatlik Aktivite Eğrisi"
+        baslik_en = f"Hourly Activity Curve"
+        st.markdown(f"<div class='list-title'>{baslik_tr if secilen_dil == 'TR' else baslik_en}</div>", unsafe_allow_html=True)
+        
+        df_saat = df_gecmis.copy()
+        df_saat['Saat'] = df_saat['Tarih'].dt.hour
+        saatlik_veri = df_saat.groupby('Saat').size().reset_index(name='Açılım')
+        
+        tum_saatler = pd.DataFrame({'Saat': range(24)})
+        saatlik_veri = pd.merge(tum_saatler, saatlik_veri, on='Saat', how='left').fillna(0)
+        
+        fig_area = px.area(
+            saatlik_veri, x="Saat", y="Açılım",
+            labels={"Saat": "Saat (0-23)", "Açılım": "Açılım Sayısı"} if secilen_dil == "TR" else {"Saat": "Time (0-23)", "Açılım": "Openings"}
+        )
+        
+        fig_area.update_traces(
+            line=dict(color="#38bdf8", width=3, shape="spline"),
+            fillcolor="rgba(56, 189, 248, 0.15)",
+            mode="lines+markers",
+            marker=dict(color="#818cf8", size=6, symbol="circle")
+        )
+        
+        fig_area.update_layout(
+            height=250,
+            paper_bgcolor='rgba(0,0,0,0)', 
+            plot_bgcolor='rgba(0,0,0,0)', 
+            font=dict(family="'Inter', 'Helvetica Neue', sans-serif", size=13, color='#cbd5e1'), 
+            margin=dict(t=10, b=10, l=10, r=10),
+            xaxis=dict(showgrid=True, gridcolor='rgba(51, 65, 85, 0.4)', gridwidth=1, tickmode='linear', tick0=0, dtick=3),
+            yaxis=dict(showgrid=True, gridcolor='rgba(51, 65, 85, 0.4)', gridwidth=1, visible=False),
+            showlegend=False
+        )
+        st.plotly_chart(fig_area, width='stretch')
+
+def get_product_svg(urun_adi):
+    import base64
+    if "RedBull" in urun_adi:
+        if "Lilac" in urun_adi: color = "#c084fc"
+        elif "Peach" in urun_adi: color = "#fb923c"
+        elif "White" in urun_adi: color = "#f8fafc"
+        elif "Blue" in urun_adi: color = "#3b82f6"
+        elif "Pembe" in urun_adi or "Pink" in urun_adi: color = "#f472b6"
+        else: color = "#dc2626"
+        
+        isim = urun_adi.replace("RedBull_", "").replace("_", " ")
+        if isim == "Klasik": isim = "Classic"
+        
+        svg = f"""<svg viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg">
+          <circle cx="50" cy="40" r="24" fill="#facc15" />
+          <path fill="{color}" d="M 45 35 Q 35 25 20 30 Q 10 35 20 45 Q 25 60 45 55 Q 35 45 45 35 Z" />
+          <path fill="{color}" d="M 55 35 Q 65 25 80 30 Q 90 35 80 45 Q 75 60 55 55 Q 65 45 55 35 Z" />
+          <text x="50" y="85" font-family="Arial, sans-serif" font-size="15" font-weight="bold" fill="white" text-anchor="middle">{isim.upper()}</text>
+        </svg>"""
+    elif "Pepsi" in urun_adi:
+        svg = """<svg viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg">
+          <circle cx="50" cy="40" r="28" fill="#1d4ed8" />
+          <path fill="#dc2626" d="M 22 40 A 28 28 0 0 1 78 40 Q 50 50 22 40 Z" />
+          <path fill="white" d="M 22 40 Q 50 50 78 40 Q 60 55 26 50 Z" />
+          <text x="50" y="85" font-family="Arial, sans-serif" font-size="15" font-weight="bold" fill="white" text-anchor="middle">PEPSI</text>
+        </svg>"""
+    elif "Fanta" in urun_adi:
+        svg = """<svg viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg">
+          <circle cx="50" cy="40" r="28" fill="#f97316" />
+          <path fill="#22c55e" d="M 65 15 Q 75 5 85 15 Q 75 25 65 15 Z" />
+          <text x="50" y="48" font-family="Arial, sans-serif" font-size="22" font-weight="900" fill="white" text-anchor="middle">F</text>
+          <text x="50" y="85" font-family="Arial, sans-serif" font-size="15" font-weight="bold" fill="white" text-anchor="middle">FANTA</text>
+        </svg>"""
+    elif "CocaCola_Zero" in urun_adi or "Zero" in urun_adi:
+        svg = """<svg viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg">
+          <circle cx="50" cy="40" r="26" fill="#000000" />
+          <path fill="none" stroke="#dc2626" stroke-width="2.5" d="M 30 45 Q 40 30 50 45 T 70 40" />
+          <text x="50" y="85" font-family="Arial, sans-serif" font-size="11" font-weight="bold" fill="white" text-anchor="middle">COCA COLA ZERO</text>
+        </svg>"""
+    elif "Cola" in urun_adi:
+        svg = """<svg viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg">
+          <circle cx="50" cy="40" r="26" fill="#dc2626" />
+          <path fill="none" stroke="white" stroke-width="2.5" d="M 30 45 Q 40 30 50 45 T 70 40" />
+          <path fill="none" stroke="white" stroke-width="1.5" d="M 35 52 Q 45 42 52 52 T 65 48" />
+          <text x="50" y="85" font-family="Arial, sans-serif" font-size="11" font-weight="bold" fill="white" text-anchor="middle">COCA COLA CLASSIC</text>
+        </svg>"""
+    elif "Nescafe" in urun_adi:
+        svg = """<svg viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg">
+          <rect x="26" y="16" width="48" height="48" rx="8" fill="#dc2626" />
+          <path fill="none" stroke="white" stroke-width="3" stroke-linecap="round" d="M 36 30 C 36 30 42 20 48 30 C 54 40 64 30 64 30" />
+          <path fill="white" d="M 35 45 L 65 45 L 60 55 L 40 55 Z" />
+          <text x="50" y="85" font-family="Arial, sans-serif" font-size="14" font-weight="bold" fill="white" text-anchor="middle">NESCAFE</text>
+        </svg>"""
+    else:
+        isim = urun_adi.replace("_", " ")[:10]
+        svg = f"""<svg viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg">
+          <circle cx="50" cy="40" r="28" fill="#64748b" />
+          <text x="50" y="85" font-family="Arial, sans-serif" font-size="15" font-weight="bold" fill="white" text-anchor="middle">{isim.upper()}</text>
+        </svg>"""
+        
+    b64 = base64.b64encode(svg.encode('utf-8')).decode('utf-8')
+    return f"data:image/svg+xml;base64,{b64}"
 
 def draw_stok():
     render_mobile_ui("📦", "Stok Durumu" if secilen_dil == "TR" else "Stock Status", f"{toplam_stok} Ürün" if secilen_dil == "TR" else f"{toplam_stok} Items", "Dolapta bulunan toplam ürün miktarı ve stok dağılımı." if secilen_dil == "TR" else "Total items in fridge and stock distribution.", liste_stok, system_note_text, yorum_stok, detail_btn_text)
     if pie_data:
-        df_pie = pd.DataFrame(pie_data)
-        fig = px.pie(df_pie, values='Stok', names='Ürün', hole=0.4, color_discrete_sequence=px.colors.sequential.Blues_r)
-        fig.update_layout(
-            height=300, paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)', 
-            font=dict(family="'Inter', 'Helvetica Neue', sans-serif", size=14, color='#cbd5e1'), 
-            margin=dict(t=0, b=0, l=0, r=0)
-        )
-        fig.update_traces(textposition='inside', textinfo='percent+label', textfont_size=15, textfont_color="#ffffff", textfont_family="'Inter', 'Helvetica Neue', sans-serif")
-        st.plotly_chart(fig, width='stretch')
+        # Streamlit markdown parser indents as code blocks, so we remove leading spaces
+        html = '<div style="display:flex; flex-wrap:wrap; gap:12px; justify-content:center; margin-bottom:20px; margin-top: 10px;">\n'
+        for d in pie_data:
+            if d["Stok"] == 0: continue
+            svg_uri = get_product_svg(d["Orijinal"])
+            isim = d["Ürün"]
+            stok = d["Stok"]
+            
+            html += f'<div style="background: linear-gradient(145deg, rgba(30,41,59,0.6), rgba(15,23,42,0.8)); border: 1px solid rgba(56,189,248,0.2); border-radius:16px; padding:12px; width:115px; display:flex; flex-direction:column; align-items:center; box-shadow: 0 4px 15px rgba(0,0,0,0.3); position:relative;">'
+            html += f'<div style="position:absolute; top:8px; right:10px; background:#38bdf8; color:#0f172a; font-size:11px; font-weight:800; padding:2px 6px; border-radius:8px;">{stok}</div>'
+            html += f'<img src="{svg_uri}" style="width:75px; height:75px; margin-bottom:8px;">'
+            html += f'<div style="color:#e2e8f0; font-size:11px; font-weight:600; text-align:center; line-height:1.2; height:28px; overflow:hidden; display:flex; align-items:center;">{isim}</div>'
+            html += '</div>\n'
+        
+        html += '</div>'
+        st.markdown(html, unsafe_allow_html=True)
 
 def draw_siparis():
     render_mobile_ui("🛒", "Sipariş Gerekenler" if secilen_dil == "TR" else "Items Needing Order", f"{len([x for x in liste_siparis if 'yok' not in x and 'No items' not in x])} Ürün" if secilen_dil == "TR" else f"{len([x for x in liste_siparis if 'yok' not in x and 'No items' not in x])} Items", "Stok seviyesine göre sipariş edilmesi gereken ürünler." if secilen_dil == "TR" else "Items to be ordered based on current burn rate.", liste_siparis, system_note_text, yorum_siparis, detail_btn_text)
@@ -564,24 +799,67 @@ def draw_trend():
 # ==========================================
 # ANA EKRAN YERLEŞİMİ (LAYOUT)
 # ==========================================
-if "Mobil" in arayuz_tipi or "Mobile" in arayuz_tipi:
-    col_left, col_mid, col_right = st.columns([1, 2, 1])
-    with col_mid:
-        tab_isimleri = ["🚪 Kapak", "📦 Stok", "🛒 Sipariş", "🏆 Analiz"] if secilen_dil == "TR" else ["🚪 Access", "📦 Stock", "🛒 Orders", "🏆 Analytics"]
-        t1, t2, t3, t4 = st.tabs(tab_isimleri)
-        with t1: draw_acilis()
-        with t2: draw_stok()
-        with t3: draw_siparis()
-        with t4: draw_trend()
-else:
-    row1_col1, row1_col2 = st.columns(2)
-    with row1_col1: draw_acilis()
-    with row1_col2: draw_stok()
+if "Tahminler" in secilen_sayfa or "Smart Predictions" in secilen_sayfa:
+    st.markdown(f"<h2 style='color:white; margin-bottom: 20px;'>{'🧠 Akıllı Tahminler & Bulanık Mantık Merkezi' if secilen_dil == 'TR' else '🧠 Smart Predictions & Fuzzy Logic Center'}</h2>", unsafe_allow_html=True)
     
-    st.markdown("<br>", unsafe_allow_html=True)
-    row2_col1, row2_col2 = st.columns(2)
-    with row2_col1: draw_siparis()
-    with row2_col2: draw_trend()
+    st.markdown(f"#### {'1. Genel Sistem Davranışı' if secilen_dil == 'TR' else '1. General System Behavior'}")
+    c1, c2 = st.columns(2)
+    with c1:
+        st.markdown(yorum_acilis, unsafe_allow_html=True)
+    with c2:
+        st.markdown(yorum_trend, unsafe_allow_html=True)
+        
+    st.markdown("---")
+    st.markdown(f"#### {'2. Sipariş & Stok Öncelikleri' if secilen_dil == 'TR' else '2. Order & Stock Priorities'}")
+    c3, c4 = st.columns(2)
+    with c3:
+        st.markdown(yorum_siparis, unsafe_allow_html=True)
+    with c4:
+        st.markdown(yorum_stok, unsafe_allow_html=True)
+        
+    st.markdown("---")
+    st.markdown(f"#### {'3. Dolum & Optimizasyon Tavsiyesi' if secilen_dil == 'TR' else '3. Refill & Optimization Advice'}")
+    
+    # Çeşitlendirilmiş Akıllı Tahmin - Boşluk Analizi
+    toplam_olmasi_gereken = sum([k.get('baslangic_stok', 20) for k in katalog.values()])
+    mevcut_stok = sum(durum['stok'].values())
+    bosluk_orani = 1 - (mevcut_stok / max(toplam_olmasi_gereken, 1))
+    
+    if bosluk_orani > 0.6:
+        t_renk = "#dc2626"
+        t_sev = "ACİL DOLUM" if secilen_dil == "TR" else "URGENT REFILL"
+        t_msg = f"Dolap kapasitesinin <strong>%{(bosluk_orani*100):.0f}'i boş</strong>. En kısa sürede genel dolum yapılması gerekiyor." if secilen_dil == "TR" else f"Cabinet is <strong>%{(bosluk_orani*100):.0f} empty</strong>. General refill required ASAP."
+    elif bosluk_orani > 0.3:
+        t_renk = "#ca8a04"
+        t_sev = "KISMEN DOLUM" if secilen_dil == "TR" else "PARTIAL REFILL"
+        t_msg = f"Dolapta <strong>%{(bosluk_orani*100):.0f} boşluk</strong> var. Kritik ürünlerin takviyesi yapılabilir." if secilen_dil == "TR" else f"Cabinet is <strong>%{(bosluk_orani*100):.0f} empty</strong>. Critical items can be replenished."
+    else:
+        t_renk = "#16a34a"
+        t_sev = "OPTIMUM" if secilen_dil == "TR" else "OPTIMAL"
+        t_msg = "Dolap doluluk oranı optimum seviyede. Şu an için toplu bir dolum operasyonuna gerek yoktur." if secilen_dil == "TR" else "Cabinet capacity is at optimal level. No bulk refill operation needed currently."
+    
+    _tavsiye_badge = fe.badge_html(t_sev, t_renk, dil=secilen_dil)
+    tavsiye_html = fe.yorum_kutusu(f"🤖 {'Yapay Zeka Operasyon Önerisi' if secilen_dil == 'TR' else 'AI Operation Suggestion'} &nbsp; {_tavsiye_badge}", t_msg)
+    st.markdown(tavsiye_html, unsafe_allow_html=True)
+else:
+    if "Mobil" in arayuz_tipi or "Mobile" in arayuz_tipi:
+        col_left, col_mid, col_right = st.columns([1, 2, 1])
+        with col_mid:
+            tab_isimleri = ["🚪 Kapak", "📦 Stok", "🛒 Sipariş", "🏆 Analiz"] if secilen_dil == "TR" else ["🚪 Access", "📦 Stock", "🛒 Orders", "🏆 Analytics"]
+            t1, t2, t3, t4 = st.tabs(tab_isimleri)
+            with t1: draw_acilis()
+            with t2: draw_stok()
+            with t3: draw_siparis()
+            with t4: draw_trend()
+    else:
+        row1_col1, row1_col2 = st.columns(2)
+        with row1_col1: draw_acilis()
+        with row1_col2: draw_stok()
+        
+        st.markdown("<br>", unsafe_allow_html=True)
+        row2_col1, row2_col2 = st.columns(2)
+        with row2_col1: draw_siparis()
+        with row2_col2: draw_trend()
 
 if otomatik_yenile:
     time.sleep(2)

@@ -83,31 +83,53 @@ plt.close()
 with PdfPages('3_Veri_Seti_ve_Augmentation_Raporu.pdf') as pdf:
     fig, ax = plt.subplots(figsize=(10, 8))
     ax.axis('off')
-    
+
     metin = (
         "PROJE VERİ SETİ VE DATA AUGMENTATION (VERİ ARTIRIMI) RAPORU\n"
         "===========================================================\n\n"
         "1. Train / Test Dağılımı\n"
         "------------------------\n"
-        f"Toplam Veri Sayısı: {X.shape[0]} adet fotoğraf\n"
+        f"Toplam Veri Sayısı : {X.shape[0]} adet fotoğraf\n"
         f"Train (Eğitim) Seti: {X_train.shape[0]} adet fotoğraf (%80)\n"
-        f"Test (Doğrulama) Seti: {X_test.shape[0]} adet fotoğraf (%20)\n\n"
-        "2. Data Imbalance (Veri Dengesizliği) Çözümü\n"
-        "---------------------------------------------\n"
-        "Projeye başlarken ürün fotoğraflarının sayıları dengesizdi (Örn: RedBull_Blue sınıfında\n"
-        "az, CocaCola_Klasik sınıfında fazla fotoğraf mevcuttu). Bu durum, modelin çok fotoğrafı\n"
-        "olan sınıfa yönelmesine (bias) neden olacaktı.\n\n"
-        "Bu sorunu çözmek için Keras ImageDataGenerator kullanılarak 'Data Augmentation' işlemi\n"
-        "uygulanmıştır. Eksik olan fotoğraflara şu dönüşümler yapılmıştır:\n"
-        "  - rotation_range=20 (±20 derece rastgele döndürme)\n"
-        "  - width/height_shift_range=0.2 (Yatay ve dikey kaydırma)\n"
-        "  - zoom_range=0.15 (Yüzde 15'e kadar yakınlaştırma)\n"
-        "  - horizontal_flip=True (Yatay eksende simetrik çevirme)\n\n"
-        "Sonuç: Bu işlemler sonucunda tüm sınıflar eksiksiz olarak TAM 100 ADET fotoğrafa\n"
-        "sabitlenmiş ve modelin sınıfları ezberlemesi (overfitting) engellenmiştir.\n"
+        f"Test (Doğrulama)   : {X_test.shape[0]} adet fotoğraf (%20)\n"
+        "Bölme Yöntemi      : Stratified split (her sınıftan eşit oranda)\n\n"
+        "2. Super Augmentation Pipeline (super_augment.py)\n"
+        "-------------------------------------------------\n"
+        "Projedeki ham veri seti sınıf başına dengesiz sayıda görüntü içeriyordu.\n"
+        "Tüm sınıfları TAM 400 ADET fotoğrafa eşitlemek için özel bir\n"
+        "'Super Augmentation' boru hattı (super_augment.py) geliştirilmiştir.\n"
+        "Bu boru hattı 3 seviyeye ayrılmış 16 farklı dönüşüm uygular:\n\n"
+        "  [HAFİF DÖNÜŞÜMLER]\n"
+        "    - Rotation       : ±35 derece rastgele döndürme\n"
+        "    - Zoom + Crop    : %8–25 oranında merkezi kırpma + yeniden boyutlandırma\n"
+        "    - Horizontal Flip: Yatay eksende simetrik çevirme\n"
+        "    - Contrast       : alpha=0.5–1.8, beta=−50/+50 kontrast ayarı\n"
+        "    - Channel Shift  : Her renk kanalına bağımsız x0.65–1.35 sapma\n"
+        "    - Sharpening     : Unsharp mask filtresi (mix=0.4–1.0)\n"
+        "    - Sensor Noise   : σ = %3–10 Gaussian gürültü (ESP32 kamera simülasyonu)\n\n"
+        "  [ORTA DÖNÜŞÜMLER]\n"
+        "    - Perspective    : ±%18 perspektif bozulması (farklı açı simülasyonu)\n"
+        "    - Focus Blur     : 5–13 piksel Gaussian blur (odak kaybı)\n"
+        "    - Motion Blur    : 7–19 piksel yatay/dikey/köşegen hareket bulanıklığı\n"
+        "    - Shadow Strip   : Yatay veya dikey gölge şeridi (x0.2–0.55 koyultma)\n"
+        "    - Vignette       : Kenar kararması (Gaussian maske, f=0.35–0.70)\n"
+        "    - JPEG Artifact  : 15–55 kalite JPEG sıkıştırma (düşük kalite kamera)\n"
+        "    - HSV Color Shift: Hue ±25°, Saturation x0.4–1.6, Value x0.5–1.5\n\n"
+        "  [AĞIR DÖNÜŞÜMLER] — %45 ihtimalle uygulanır\n"
+        "    - Dark Room      : x0.15–0.55 karanlık ortam simülasyonu\n"
+        "    - Overexposure   : x1.50–2.20 aşırı parlak ortam simülasyonu\n\n"
+        "3. Online Augmentation (beyin_egit.py — Eğitim Sırasında)\n"
+        "----------------------------------------------------------\n"
+        "Model eğitimi sırasında her epoch'ta ek hafif dönüşümler uygulanmıştır:\n"
+        "  - Horizontal Flip : %50 ihtimalle yatay çevirme\n"
+        "  - Rotation        : ±15 derece döndürme\n"
+        "  - Brightness      : x0.70–1.30 parlaklık değişimi\n"
+        "  - Gaussian Noise  : σ = 0.02 (normalize uzayda)\n"
+        "Bu sayede model her epoch'ta görüntülerin farklı varyantlarını görmüştür.\n"
     )
-    
-    ax.text(0.05, 0.95, metin, transform=ax.transAxes, fontsize=11, verticalalignment='top', family='monospace')
+
+    ax.text(0.04, 0.97, metin, transform=ax.transAxes, fontsize=9.8,
+            verticalalignment='top', family='monospace', linespacing=1.4)
     pdf.savefig(fig)
     plt.close()
 
@@ -117,32 +139,50 @@ with PdfPages('3_Veri_Seti_ve_Augmentation_Raporu.pdf') as pdf:
 with PdfPages('4_Hiperparametre_ve_Mimari_Raporu.pdf') as pdf:
     fig, ax = plt.subplots(figsize=(10, 8))
     ax.axis('off')
-    
+
     metin = (
         "CNN MİMARİSİ VE HİPERPARAMETRE TERCİHLERİ\n"
         "===========================================================\n\n"
-        "1. GlobalAveragePooling2D Katmanı\n"
-        "Neden Kullanıldı: Başlangıçta kullanılan Flatten() katmanı 25.6 milyon parametre\n"
-        "üreterek modelin ezberlemesine (overfitting) yol açmıştı. Bu katman sayesinde\n"
-        "parametre sayısı 100 bin seviyesine düşürülerek ezberleme sorunu kesin olarak çözüldü.\n\n"
-        "2. Dropout(0.4) Oranı\n"
-        "Neden Kullanıldı: Eğitim sırasında nöronların %40'ı rastgele kapatılarak, modelin\n"
-        "kolaya kaçması engellendi. Bu oran, veri setimizin boyutu (880 train) için ezberlemeyi\n"
-        "önleyecek en optimum (ne çok az, ne çok fazla) değer olarak seçildi.\n\n"
-        "3. batch_size = 32\n"
-        "Neden Kullanıldı: Modelin fotoğrafları 32'şerli gruplar halinde işlemesi sağlandı.\n"
-        "Daha küçük gruplar (örn: 8) eğitimi çok uzatırken, daha büyük gruplar (örn: 128)\n"
-        "modelin genelleme yapma yeteneğini (test başarısını) düşürdüğü için 32 tercih edildi.\n\n"
-        "4. ReduceLROnPlateau (Öğrenme Hızı Düşürücü)\n"
-        "Neden Kullanıldı: Model minimum hataya yaklaştığında (val_loss plato yaptığında),\n"
-        "hedefi ıskalamaması için öğrenme hızının otomatik olarak yarı yarıya (factor=0.5)\n"
-        "düşürülmesi sağlandı. Bu sayede model %100 test başarısına ulaştı.\n\n"
-        "5. EarlyStopping (patience=15)\n"
-        "Neden Kullanıldı: 15 epoch boyunca model kendini geliştiremezse eğitimi durdurarak\n"
-        "sistemin gereksiz yere çalışmasını ve ezberlemeye başlamasını engellemek için kullanıldı.\n"
+        "1. Model Mimarisi — 5 Katmanlı Özel CNN\n"
+        "----------------------------------------\n"
+        "  Giriş        : 224 x 224 x 3 (RGB görüntü)\n"
+        "  Blok 1       : Conv2D(32,  3×3, ReLU) → BatchNorm → MaxPool(2×2)\n"
+        "  Blok 2       : Conv2D(64,  3×3, ReLU) → BatchNorm → MaxPool(2×2)\n"
+        "  Blok 3       : Conv2D(128, 3×3, ReLU) → BatchNorm → MaxPool(2×2)\n"
+        "  Blok 4       : Conv2D(256, 3×3, ReLU) → BatchNorm → MaxPool(2×2)\n"
+        "  Blok 5       : Conv2D(256, 3×3, ReLU) → BatchNorm  (pooling yok)\n"
+        "  Karar Bölümü : GlobalAveragePooling2D → Dense(256) → Dropout(0.5)\n"
+        "                 → Dense(128) → Dropout(0.3) → Dense(11, Softmax)\n\n"
+        "2. GlobalAveragePooling2D\n"
+        "Flatten() yerine tercih edildi. Flatten, 25+ milyon parametre üreterek\n"
+        "overfitting'e yol açıyordu. GlobalAveragePooling2D özellik haritasını\n"
+        "tek bir değere indirger; parametre sayısını dramatik biçimde düşürür\n"
+        "ve modelin genelleme kapasitesini artırır.\n\n"
+        "3. L2 Regularization (kernel_regularizer=l2(1e-4))\n"
+        "Tüm Conv2D ve Dense(256) katmanlarına uygulandı. Ağırlıkların\n"
+        "büyümesini cezalandırarak modelin gereksiz karmaşıklık öğrenmesini önler.\n\n"
+        "4. Dropout Oranları\n"
+        "  - Dense(256) sonrası Dropout(0.5) : Nöronların %50'si rastgele kapatılır;\n"
+        "    büyük boyutlu katmanda güçlü regularization etkisi sağlar.\n"
+        "  - Dense(128) sonrası Dropout(0.3) : Daha dar katmanda daha hafif baskı,\n"
+        "    son sınıflandırma kararı için yeterli bilgi akışı korunur.\n\n"
+        "5. batch_size = 32\n"
+        "32'lik mini-batch, gradient güncellemelerini dengeleyerek hem hız hem\n"
+        "genelleme açısından optimum noktadır. 8 → çok yavaş; 128 → genelleme kaybı.\n\n"
+        "6. EarlyStopping (monitor='val_accuracy', patience=15)\n"
+        "Val_accuracy 15 epoch boyunca iyileşmezse eğitim durur ve en iyi\n"
+        "ağırlıklar geri yüklenir (restore_best_weights=True).\n\n"
+        "7. ReduceLROnPlateau (monitor='val_loss', factor=0.5, patience=5)\n"
+        "Val_loss 5 epoch plato yaptığında öğrenme hızı yarıya düşürülür.\n"
+        "Minimum öğrenme hızı: 1e-6. Bu mekanizma modelin ince ayar yapmasını sağlar.\n\n"
+        "8. Optimizer & Loss\n"
+        "  Optimizer : Adam (adaptif öğrenme hızı, varsayılan lr=1e-3)\n"
+        "  Loss      : Sparse Categorical Cross-Entropy (integer etiketler için)\n"
+        "  Metric    : Accuracy\n"
     )
-    
-    ax.text(0.05, 0.95, metin, transform=ax.transAxes, fontsize=11, verticalalignment='top', family='monospace')
+
+    ax.text(0.04, 0.97, metin, transform=ax.transAxes, fontsize=9.8,
+            verticalalignment='top', family='monospace', linespacing=1.4)
     pdf.savefig(fig)
     plt.close()
 

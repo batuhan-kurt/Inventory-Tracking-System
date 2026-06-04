@@ -43,3 +43,5 @@ __pycache__/
 # IDE
 .vscode/
 .idea/
+__pycache__/
+bitirme_ciktilari/
