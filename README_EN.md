@@ -382,28 +382,26 @@ python tahmin_yap_toplu.py
 Inventory-Tracking-System/
 │
 ├── 📡 FIRMWARE
-│   ├── ESP32_Akilli_Dolap_FINAL/
-│   │   └── ESP32_Akilli_Dolap_FINAL.ino   # Main firmware (OV5640 + HX711 + UDP)
+│   ├── ESP32_Akilli_Dolap_FINAL.ino   # Main firmware (OV5640 + HX711 + UDP Auto-Discovery)
 │   └── legacy/
-│       └── esp32_hx711_main.cpp           # Old version (archived)
+│       ├── esp32_hx711_main.cpp       # Old ESP32 firmware (archived)
+│       ├── veri_denge.py              # Old basic augmentation (replaced by super_augment.py)
+│       ├── tam_otonom_dolap.py        # Standalone engine (integrated into api_sunucu.py)
+│       ├── tahmin_yap.py              # Single image test tool (archived)
+│       └── tahmin_yap_toplu.py        # Batch test tool (archived)
 │
 ├── 🧠 AI & MODEL
 │   ├── beyin_egit.py          # 5-block CNN training (online augmentation)
 │   ├── super_augment.py       # 16-technique data augmentation pipeline
-│   ├── veri_hazirla.py        # Dataset → NumPy converter
-│   ├── veri_denge.py          # Class balancing
-│   ├── tahmin_yap.py          # Single image inference
-│   └── tahmin_yap_toplu.py    # Batch accuracy test
+│   └── veri_hazirla.py        # Dataset → NumPy converter
 │
 ├── 🖥️ BACKEND
 │   ├── api_sunucu.py          # Flask API (UDP broadcast + slot analysis + ORB alignment)
-│   ├── tam_otonom_dolap.py    # Standalone autonomous analysis engine
-│   ├── fuzzy_engine.py        # Mamdani FIS (written from scratch)
+│   ├── fuzzy_engine.py        # Mamdani FIS (written from scratch, 12 rules)
 │   └── piksel_bulucu.py       # Interactive slot calibration tool
 │
 ├── 📊 DASHBOARD
-│   ├── dashboard.py           # 1118-line Streamlit premium UI
-│   └── rapor_olustur.py       # PDF report generator
+│   └── dashboard.py           # 1118-line Streamlit premium UI
 │
 ├── 📂 DATA
 │   ├── urun_katalogu.json     # Product metadata + price + reorder threshold
