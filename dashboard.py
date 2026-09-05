@@ -3,300 +3,292 @@ import pandas as pd
 import json
 import time
 import os
+import requests
 import plotly.express as px
+import plotly.graph_objects as go
 from datetime import datetime
 import fuzzy_engine as fe
+import base64
 
 # ==========================================
 # AYARLAR VE CSS (Ortak Tasarım)
 # ==========================================
-st.set_page_config(page_title="AI Smart Fridge Pro", page_icon="⚡", layout="wide")
+st.set_page_config(page_title="AI Smart Fridge Pro", page_icon="✦", layout="wide")
 
 css = """
 <style>
-/* Özgün ve Lüks Koyu Tema (Neon & Glassmorphism) */
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap');
+
+/* --- 1. GLOBAL & TYPOGRAPHY --- */
+* {
+    font-family: 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif !important;
+}
+
 .stApp {
-    background: radial-gradient(circle at top right, #0a1128 0%, #040710 100%);
-    color: #e2e8f0;
+    background: radial-gradient(circle at top center, #111827 0%, #030712 100%) !important;
+    color: #f1f5f9;
 }
 
+/* Streamlit Header Gizleme ve Sidebar Glassmorphism */
+header[data-testid="stHeader"] { background: transparent !important; }
+
+/* Sidebar Ana Kasa */
 [data-testid="stSidebar"] {
-    background: linear-gradient(180deg, rgba(10, 17, 40, 0.95) 0%, rgba(4, 7, 16, 0.95) 100%) !important;
-    border-right: 1px solid rgba(56, 189, 248, 0.2);
-}
-[data-testid="stHeader"] {
-    background-color: transparent !important;
-}
-
-/* Kayan Yazı (Live Ticker) Tasarımı */
-.ticker-wrap {
-    width: 100%;
-    overflow: hidden;
-    background: linear-gradient(90deg, rgba(15, 23, 42, 0.1), rgba(56, 189, 248, 0.15), rgba(15, 23, 42, 0.1));
-    border: 1px solid rgba(56, 189, 248, 0.3);
-    padding: 10px 0;
-    margin-bottom: 25px;
-    border-radius: 12px;
-    box-shadow: 0 0 15px rgba(56, 189, 248, 0.1);
-}
-.ticker-move {
-    display: inline-block;
-    white-space: nowrap;
-    padding-left: 100%;
-    animation: ticker 30s linear infinite;
-}
-.ticker-move:hover {
-    animation-play-state: paused;
-}
-.ticker-item {
-    display: inline-block;
-    padding: 0 25px;
-    color: #cbd5e1;
-    font-weight: 500;
-    font-size: 14px;
-    letter-spacing: 0.5px;
-}
-.ticker-item span {
-    color: #38bdf8;
-    font-weight: bold;
-    margin-right: 5px;
-}
-@keyframes ticker {
-    0% { transform: translateX(0); }
-    100% { transform: translateX(-100%); }
+    background: rgba(17, 24, 39, 0.65) !important;
+    backdrop-filter: blur(30px) saturate(150%);
+    -webkit-backdrop-filter: blur(30px) saturate(150%);
+    border-right: 1px solid rgba(255,255,255,0.05);
 }
 
-div[data-testid="stTabs"] > div[role="tablist"] {
-    gap: 12px;
-    background-color: transparent;
-    padding-bottom: 15px;
-    border-bottom: 0;
+/* Sidebar İçerisindeki Yazı Tipleri (Premium Font) */
+[data-testid="stSidebar"] * {
+    font-family: 'Inter', -apple-system, sans-serif !important;
+    color: #f8fafc !important; /* PARLAK BEYAZ YAZILAR */
 }
-/* Sekme altındaki kırmızı/pembe hareketli çizgiyi kesin olarak gizle */
-[data-testid="stTabs"] [data-baseweb="tab-highlight"],
-[data-baseweb="tab-highlight"],
-div[data-baseweb="tab-border"] {
-    display: none !important;
-    background-color: transparent !important;
-    border-bottom: none !important;
-}
-button[role="tab"] {
-    background-color: rgba(15, 23, 42, 0.6) !important;
-    backdrop-filter: blur(8px);
-    border: 1px solid rgba(56, 189, 248, 0.2) !important;
-    border-radius: 14px !important;
-    padding: 12px 24px !important;
-    color: #94a3b8 !important;
-    font-size: 15px !important;
+[data-testid="stSidebar"] p, [data-testid="stSidebar"] div, [data-testid="stSidebar"] label, [data-testid="stSidebar"] span {
     font-weight: 600 !important;
+    font-size: 15px !important;
     letter-spacing: 0.5px;
+    color: #ffffff !important;
+}
+/* Özel Başlık Gradientleri */
+[data-testid="stSidebar"] h1, [data-testid="stSidebar"] h2, [data-testid="stSidebar"] h3 {
+    background: linear-gradient(135deg, #ffffff 0%, #9ca3af 100%);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    font-weight: 800;
+}
+
+/* Sidebar collapse butonunu ("keyboard / double arrow") tamamen gizle */
+[data-testid="stSidebarCollapseButton"] { display: none !important; }
+[data-testid="stSidebarNav"] { display: none !important; }
+button[title*="sidebar"], button[aria-label*="sidebar"] { display: none !important; }
+[data-testid="collapsedControl"] { display: none !important; }
+
+/* --- 2. NATIVE STREAMLIT COMPONENT OVERRIDES (Müthiş Tasarım Entegrasyonu) --- */
+
+/* Dataframe (Tablo) Tasarımları */
+[data-testid="stDataFrame"] {
+    background: rgba(31, 41, 55, 0.4);
+    backdrop-filter: blur(20px);
+    border-radius: 16px;
+    border: 1px solid rgba(255,255,255,0.05);
+    padding: 10px;
+    box-shadow: 0 10px 30px rgba(0,0,0,0.3);
+}
+[data-testid="stDataFrame"] th {
+    background-color: rgba(0,0,0,0.3) !important;
+    color: #38bdf8 !important;
+    font-weight: 700 !important;
+    border-bottom: 2px solid rgba(56, 189, 248, 0.3) !important;
+}
+[data-testid="stDataFrame"] td {
+    color: #e2e8f0 !important;
+    border-bottom: 1px solid rgba(255,255,255,0.03) !important;
+}
+
+/* Streamlit Header'ları (h1, h2, h3, markdown başlıkları) */
+.stMarkdown h1, .stMarkdown h2, .stMarkdown h3, .stMarkdown h4 {
+    font-weight: 800;
+    letter-spacing: -0.5px;
+    background: linear-gradient(135deg, #f8fafc 0%, #94a3b8 100%);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    margin-bottom: 16px;
+    padding-bottom: 10px;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+/* Streamlit Butonlar (Sidebar ve Ana Ekran) */
+div.stButton > button, div.stDownloadButton > button {
+    background: linear-gradient(135deg, #1e293b 0%, #0f172a 100%) !important;
+    color: #f8fafc !important;
+    border: 1px solid rgba(56, 189, 248, 0.3) !important;
+    border-radius: 12px !important;
+    padding: 10px 24px !important;
+    font-weight: 600 !important;
+    transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1) !important;
+    box-shadow: 0 4px 15px rgba(0,0,0,0.2);
+}
+div.stButton > button:hover, div.stDownloadButton > button:hover {
+    border-color: #38bdf8 !important;
+    box-shadow: 0 10px 25px rgba(56,189,248,0.4) !important;
+    transform: translateY(-2px) scale(1.02);
+}
+
+/* Sidebar Butonları Daha Görünür Olsun (Tamamen Eşit Stil) */
+[data-testid="stSidebar"] button[kind="primary"],
+[data-testid="stSidebar"] button[kind="secondary"],
+[data-testid="stSidebar"] button[data-testid="baseButton-secondary"],
+[data-testid="stSidebar"] div.stButton > button, 
+[data-testid="stSidebar"] div.stDownloadButton > button {
+    background: linear-gradient(135deg, #334155 0%, #1e293b 100%) !important;
+    border: 1px solid rgba(56, 189, 248, 0.8) !important;
+    box-shadow: 0 4px 20px rgba(56,189,248,0.2) !important;
+    color: #ffffff !important;
+    border-radius: 12px !important;
+    padding: 10px 24px !important;
+    font-weight: 600 !important;
+    transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1) !important;
+    min-height: 46px !important;
+}
+[data-testid="stSidebar"] button[kind="primary"]:hover,
+[data-testid="stSidebar"] button[kind="secondary"]:hover,
+[data-testid="stSidebar"] button[data-testid="baseButton-secondary"]:hover,
+[data-testid="stSidebar"] div.stButton > button:hover, 
+[data-testid="stSidebar"] div.stDownloadButton > button:hover {
+    border-color: #38bdf8 !important;
+    box-shadow: 0 10px 25px rgba(56,189,248,0.5) !important;
+    transform: translateY(-2px) scale(1.02) !important;
+}
+
+/* Sekmeler (Tabs) */
+div[data-testid="stTabs"] > div[role="tablist"] {
+    gap: 8px;
+    background: rgba(15, 23, 42, 0.6);
+    backdrop-filter: blur(15px);
+    padding: 8px;
+    border-radius: 18px;
+    border: 1px solid rgba(255,255,255,0.05);
+    box-shadow: 0 8px 25px rgba(0,0,0,0.3);
+}
+[data-testid="stTabs"] [data-baseweb="tab-highlight"], [data-baseweb="tab-highlight"], div[data-baseweb="tab-border"] { display: none !important; }
+button[role="tab"] {
+    background: transparent !important; border: none !important;
+    border-radius: 12px !important; padding: 12px 24px !important;
+    color: #94a3b8 !important; font-size: 15px !important; font-weight: 600 !important;
     transition: all 0.3s ease;
 }
 button[role="tab"][aria-selected="true"] {
     background: linear-gradient(135deg, #1e3a8a 0%, #0f172a 100%) !important;
     color: #ffffff !important;
-    border-color: #38bdf8 !important;
-    box-shadow: 0 0 15px rgba(56, 189, 248, 0.3);
+    border: 1px solid rgba(56, 189, 248, 0.2) !important;
+    box-shadow: 0 4px 15px rgba(0,0,0,0.2);
 }
 
-/* Glassmorphism Kart Tasarımı */
-.mobile-card {
-    background: linear-gradient(145deg, rgba(15, 23, 42, 0.8), rgba(2, 6, 23, 0.9));
-    backdrop-filter: blur(12px);
-    border: 1px solid rgba(56, 189, 248, 0.15);
-    border-radius: 24px;
-    padding: 28px;
-    margin-bottom: 25px;
-    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
-    position: relative;
-    overflow: hidden;
-}
-.mobile-card::before {
-    content: '';
-    position: absolute;
-    top: 0; left: 0; width: 100%; height: 4px;
-    background: linear-gradient(90deg, #38bdf8, #818cf8);
-}
-.card-header {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    margin-bottom: 18px;
-}
-.icon-box {
-    background: rgba(56, 189, 248, 0.1);
-    width: 48px;
-    height: 48px;
-    border-radius: 14px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    font-size: 24px;
-    border: 1px solid rgba(56, 189, 248, 0.2);
-}
-.detail-btn {
-    background: rgba(56, 189, 248, 0.05);
-    border: 1px solid rgba(56, 189, 248, 0.3);
-    color: #38bdf8;
-    padding: 6px 14px;
-    border-radius: 20px;
-    font-size: 11px;
-    font-weight: 600;
-    letter-spacing: 0.5px;
-    text-transform: uppercase;
-}
-.card-title {
-    color: #94a3b8;
-    font-size: 14px;
-    font-weight: 500;
-    margin-bottom: 8px;
-    letter-spacing: 0.5px;
-}
-.card-value {
-    color: #ffffff;
-    font-size: 36px;
-    font-weight: 800;
-    margin-bottom: 12px;
-    background: -webkit-linear-gradient(#ffffff, #94a3b8);
+/* Metric (Sayısal Göstergeler) */
+div[data-testid="stMetricValue"] {
+    font-size: 46px !important;
+    font-weight: 800 !important;
+    background: linear-gradient(135deg, #38bdf8 0%, #818cf8 100%);
     -webkit-background-clip: text;
     -webkit-text-fill-color: transparent;
+    letter-spacing: -2px;
 }
-.card-subtitle {
-    color: #64748b;
-    font-size: 13px;
-    line-height: 1.5;
-}
-
-.list-title {
-    color: #f8fafc;
-    font-size: 18px;
-    font-weight: 700;
-    margin-top: 15px;
-    margin-bottom: 18px;
-    display: flex;
-    align-items: center;
-    gap: 8px;
-}
-.list-title::before {
-    content: '';
-    display: block;
-    width: 4px;
-    height: 18px;
-    background-color: #38bdf8;
-    border-radius: 4px;
+div[data-testid="stMetricLabel"] {
+    font-size: 14px !important; color: #94a3b8 !important; font-weight: 600 !important; text-transform: uppercase; letter-spacing: 1px;
 }
 
-.list-item {
-    background: rgba(15, 23, 42, 0.5);
-    border: 1px solid rgba(51, 65, 85, 0.5);
-    border-radius: 16px;
-    padding: 16px 20px;
-    margin-bottom: 12px;
-    display: flex;
-    align-items: center;
-    transition: transform 0.2s ease, border-color 0.2s ease;
-}
-.list-item:hover {
-    transform: translateX(5px);
-    border-color: rgba(56, 189, 248, 0.4);
-}
-.item-number {
-    background: linear-gradient(135deg, #38bdf8 0%, #3b82f6 100%);
-    color: #ffffff;
-    width: 32px;
-    height: 32px;
-    border-radius: 10px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    font-weight: 700;
-    font-size: 14px;
-    margin-right: 18px;
-    flex-shrink: 0;
-    box-shadow: 0 2px 10px rgba(56, 189, 248, 0.3);
-}
-.item-text {
-    color: #e2e8f0;
-    font-size: 14px;
-    font-weight: 500;
-    letter-spacing: 0.3px;
+/* Info, Success, Error Box (st.info vb.) */
+div[data-testid="stAlert"] {
+    background: rgba(30, 41, 59, 0.5) !important;
+    backdrop-filter: blur(15px);
+    border-radius: 16px !important;
+    border: 1px solid rgba(255,255,255,0.05) !important;
 }
 
-.comment-box {
-    background: linear-gradient(145deg, rgba(30, 58, 138, 0.15), rgba(15, 23, 42, 0.6));
-    border: 1px dashed rgba(56, 189, 248, 0.3);
-    border-radius: 16px;
-    padding: 22px;
-    margin-top: 25px;
-    margin-bottom: 30px;
-    position: relative;
-}
-.comment-title {
-    color: #38bdf8;
-    font-weight: 700;
-    font-size: 13px;
-    margin-bottom: 10px;
-    text-transform: uppercase;
-    letter-spacing: 1px;
-    display: flex;
-    align-items: center;
-    gap: 6px;
-}
-.comment-title::before {
-    content: '💡';
-    font-size: 16px;
-}
-.comment-text {
-    color: #94a3b8;
-    font-size: 14px;
-    line-height: 1.6;
-}
-
-/* Sidebar Radio Butonlarını Şık Sekmelere (Pill/Tab) Çevirme */
+/* Radio Button Özelleştirmesi */
 div.stRadio > div[role="radiogroup"] {
-    gap: 8px;
-    flex-direction: column;
-}
-/* Sadece yatay (horizontal) radio'ları yan yana dizmek için */
-div.stRadio[data-testid="stRadio"] > div[role="radiogroup"][aria-orientation="horizontal"] {
-    flex-direction: row;
+    background: rgba(0,0,0,0.2);
+    padding: 12px 16px !important;
+    border-radius: 16px;
+    border: 1px solid rgba(255,255,255,0.05);
 }
 div.stRadio > div[role="radiogroup"] > label {
-    background: rgba(15, 23, 42, 0.5) !important;
-    border: 1px solid rgba(56, 189, 248, 0.2) !important;
-    border-radius: 12px !important;
-    padding: 10px 15px !important;
-    transition: all 0.3s ease;
-    cursor: pointer;
-    flex: 1;
-    display: flex;
-    align-items: center;
-}
-div.stRadio > div[role="radiogroup"] > label:hover {
-    border-color: rgba(56, 189, 248, 0.5) !important;
-    background: rgba(30, 58, 138, 0.4) !important;
-}
-div.stRadio > div[role="radiogroup"] > label[data-checked="true"] {
-    background: linear-gradient(135deg, #1e3a8a 0%, #0f172a 100%) !important;
-    border-color: #38bdf8 !important;
-    box-shadow: 0 0 12px rgba(56, 189, 248, 0.3);
-}
-/* Radio içindeki yazıların tasarımı */
-div.stRadio > div[role="radiogroup"] > label p {
+    color: #ffffff !important;
+    font-size: 15px !important;
     font-weight: 600 !important;
-    color: #e2e8f0 !important;
-    font-size: 14px !important;
     font-family: 'Inter', 'Helvetica Neue', sans-serif !important;
     margin-bottom: 0 !important;
 }
-/* Orijinal yuvarlak seçim ikonunu hafif küçültme (silmeden) */
-div.stRadio > div[role="radiogroup"] > label div:first-child {
-    transform: scale(0.85);
-    margin-right: 8px;
+
+/* --- 3. KENDİ HTML KARTLARIMIZ İÇİN (Apple Style Smooth) --- */
+@keyframes fadeInUp { 0% { opacity: 0; transform: translateY(20px) scale(0.99); } 100% { opacity: 1; transform: translateY(0) scale(1); } }
+.mobile-card { animation: fadeInUp 0.7s cubic-bezier(0.16, 1, 0.3, 1) forwards; }
+.mobile-card:nth-child(1) { animation-delay: 0.1s; } .mobile-card:nth-child(2) { animation-delay: 0.2s; } .mobile-card:nth-child(3) { animation-delay: 0.3s; }
+
+.mobile-card {
+    background: linear-gradient(145deg, rgba(31, 41, 55, 0.4), rgba(17, 24, 39, 0.7));
+    backdrop-filter: blur(30px) saturate(150%);
+    -webkit-backdrop-filter: blur(30px) saturate(150%);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    border-radius: 28px;
+    padding: 30px;
+    margin-bottom: 25px;
+    box-shadow: 0 15px 40px rgba(0, 0, 0, 0.4);
+    position: relative;
+    overflow: hidden;
+    transition: all 0.5s cubic-bezier(0.16, 1, 0.3, 1);
 }
+.mobile-card::before {
+    content: ''; position: absolute; top: 0; left: 0; width: 100%; height: 4px;
+    background: linear-gradient(90deg, #38bdf8, #818cf8, #34d399);
+    opacity: 0.5; transition: opacity 0.4s;
+}
+.mobile-card:hover {
+    transform: translateY(-8px) scale(1.01);
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    box-shadow: 0 25px 50px rgba(0, 0, 0, 0.5);
+}
+.mobile-card:hover::before { opacity: 1; }
+
+.card-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; }
+.icon-box {
+    background: rgba(56, 189, 248, 0.1);
+    width: 56px; height: 56px; border-radius: 18px;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 28px; border: 1px solid rgba(56, 189, 248, 0.2);
+    box-shadow: inset 0 0 15px rgba(56, 189, 248, 0.05);
+}
+.detail-btn { background: rgba(56, 189, 248, 0.08); border: 1px solid rgba(56, 189, 248, 0.3); color: #38bdf8; padding: 6px 14px; border-radius: 20px; font-size: 11px; font-weight: 700; letter-spacing: 1px; text-transform: uppercase; transition: all 0.3s; }
+.detail-btn:hover { background: #38bdf8; color: #020617; }
+
+.card-title { font-size: 13px; color: #94a3b8; font-weight: 600; text-transform: uppercase; letter-spacing: 1.5px; margin-bottom: 6px; }
+.card-value { font-size: 46px; font-weight: 800; color: #f8fafc; line-height: 1; margin-bottom: 8px; letter-spacing: -2px; }
+.card-subtitle { font-size: 14px; color: #38bdf8; font-weight: 500; }
+
+.list-title { font-size: 12px; color: #64748b; font-weight: 700; text-transform: uppercase; letter-spacing: 1px; margin: 24px 0 12px 0; border-bottom: 1px solid rgba(255,255,255,0.05); padding-bottom: 8px; }
+.list-item { display: flex; align-items: center; gap: 12px; padding: 12px 16px; background: rgba(0,0,0,0.2); border-radius: 16px; margin-bottom: 8px; border: 1px solid rgba(255,255,255,0.03); transition: all 0.3s; }
+.list-item:hover { background: rgba(56, 189, 248, 0.08); transform: translateX(5px); border-color: rgba(56, 189, 248, 0.2); }
+.item-number { width: 30px; height: 30px; background: rgba(56, 189, 248, 0.15); color: #38bdf8; border-radius: 10px; display: flex; align-items: center; justify-content: center; font-weight: 700; font-size: 14px; }
+.item-text { font-size: 15px; color: #e2e8f0; font-weight: 500; }
+
+.comment-box { background: linear-gradient(135deg, rgba(15, 23, 42, 0.7), rgba(30, 41, 59, 0.8)); backdrop-filter: blur(25px); border-left: 4px solid #38bdf8; border-right: 1px solid rgba(255,255,255,0.05); border-top: 1px solid rgba(255,255,255,0.05); border-bottom: 1px solid rgba(255,255,255,0.05); padding: 20px; border-radius: 12px; margin-top: 24px; box-shadow: 0 10px 30px rgba(0,0,0,0.3); }
+.comment-title { font-size: 12px; color: #38bdf8; font-weight: 800; text-transform: uppercase; letter-spacing: 1px; margin-bottom: 8px; }
+.comment-text { font-size: 15px; color: #cbd5e1; line-height: 1.6; font-weight: 400; }
+
+
+.apple-box {
+    background: linear-gradient(145deg, rgba(31, 41, 55, 0.5), rgba(17, 24, 39, 0.8));
+    backdrop-filter: blur(25px) saturate(180%);
+    -webkit-backdrop-filter: blur(25px) saturate(180%);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    border-radius: 24px;
+    padding: 24px;
+    margin-bottom: 20px;
+    box-shadow: 0 15px 35px rgba(0, 0, 0, 0.3);
+    transition: transform 0.4s ease, box-shadow 0.4s ease;
+}
+.apple-box:hover {
+    transform: translateY(-4px);
+    box-shadow: 0 20px 45px rgba(0, 0, 0, 0.4);
+    border-color: rgba(255, 255, 255, 0.15);
+}
+
+/* --- 4. TİCKER (KAYAN YAZI) --- */
+.ticker-wrap { width: 100%; overflow: hidden; background: linear-gradient(90deg, rgba(15, 23, 42, 0.2), rgba(56, 189, 248, 0.1), rgba(15, 23, 42, 0.2)); border: 1px solid rgba(56, 189, 248, 0.2); padding: 14px 0; margin-bottom: 30px; border-radius: 20px; box-shadow: 0 4px 20px rgba(0,0,0,0.2); }
+.ticker-move { display: inline-block; white-space: nowrap; padding-left: 100%; animation: ticker 25s linear infinite; }
+.ticker-move:hover { animation-play-state: paused; }
+.ticker-item { display: inline-block; padding: 0 30px; color: #cbd5e1; font-weight: 500; font-size: 15px; }
+.ticker-item span { color: #38bdf8; font-weight: 700; margin-right: 8px; }
+@keyframes ticker { 0% { transform: translateX(0); } 100% { transform: translateX(-100%); } }
 </style>
 """
 st.markdown(css, unsafe_allow_html=True)
+
+def clean_html(html):
+    """Streamlit markdown'ın indented HTML'i kod bloğu olarak yorumlamasını önler."""
+    return ''.join(line.strip() for line in html.split('\n') if line.strip())
 
 def render_mobile_ui(icon, title, value, subtitle, list_data, comment_title, comment_text, detail_btn_text):
     html = f'<div class="mobile-card">'
@@ -326,10 +318,10 @@ def render_mobile_ui(icon, title, value, subtitle, list_data, comment_title, com
 # ==========================================
 # VERİ OKUMA VE HESAPLAMA
 # ==========================================
-JSON_DURUM = "sistem_durumu.json"
+JSON_DURUM  = "sistem_durumu.json"
 JSON_KATALOG = "urun_katalogu.json"
-CSV_GECMIS = "satis_gecmisi.csv"
-RESIM_YOLU = "test_resmi.jpeg"
+CSV_GECMIS  = "satis_gecmisi.csv"
+RESIM_YOLU  = "dolap_oncesi.jpg"   # Gerçek dolap kamera görüntüsü
 
 try:
     with open(JSON_KATALOG, "r", encoding="utf-8") as f:
@@ -341,10 +333,11 @@ try:
         durum = json.load(f)
 except:
     durum = {"stok": {}}
-try:
-    df_gecmis_ham = pd.read_csv(CSV_GECMIS)
-    df_gecmis_ham['Tarih'] = pd.to_datetime(df_gecmis_ham['Tarih'])
-except:
+try: 
+    df_gecmis_ham = pd.read_csv(CSV_GECMIS, names=["Tarih", "Urun", "Islem", "Adet"])
+    df_gecmis_ham['Tarih'] = pd.to_datetime(df_gecmis_ham['Tarih'], errors='coerce')
+    df_gecmis_ham = df_gecmis_ham.dropna(subset=['Tarih'])
+except: 
     df_gecmis_ham = pd.DataFrame(columns=["Tarih", "Urun", "Islem", "Adet"])
 
 
@@ -357,7 +350,7 @@ st.sidebar.markdown("---")
 
 st.sidebar.markdown("**Sayfa / Page**" if secilen_dil == "TR" else "**Page**")
 secilen_sayfa = st.sidebar.radio("Sayfa", 
-                                ["📊 Ana Dashboard", "🧠 Akıllı Tahminler"] if secilen_dil == "TR" else ["📊 Main Dashboard", "🧠 Smart Predictions"], 
+                                ["✦ Ana Dashboard", "❖ Akıllı Tahminler", "⚲ Canlı Operasyon", "⌘ Kamera & Görüş"] if secilen_dil == "TR" else ["✦ Main Dashboard", "❖ Smart Predictions", "⚲ Live Operations", "⌘ Camera & Vision"], 
                                 label_visibility="collapsed")
 st.sidebar.markdown("---")
 
@@ -365,6 +358,7 @@ st.sidebar.markdown("**Arayüz / Interface**")
 arayuz_tipi = st.sidebar.radio(
     "Arayüz", 
     ["📱 Mobil Arayüz", "💻 Web Arayüz"] if secilen_dil == "TR" else ["📱 Mobile UI", "💻 Web UI"],
+    index=1,
     label_visibility="collapsed"
 )
 st.sidebar.markdown("---")
@@ -378,27 +372,13 @@ st.sidebar.markdown("---")
 
 # OTOMATİK YENİLE BUTONU (Yeni Tasarım ve Konum)
 st.sidebar.markdown("**Otomatik Yenile / Auto Refresh**")
-yenile_secenekleri = ["🔴 Kapalı", "🟢 Açık"] if secilen_dil == "TR" else ["🔴 Off", "🟢 On"]
+yenile_secenekleri = ["⌘ Kapalı", "⚲ Açık"] if secilen_dil == "TR" else ["⌘ Off", "⚲ On"]
 otomatik_yenile_secim = st.sidebar.radio("Otomatik Yenile", yenile_secenekleri, label_visibility="collapsed")
 otomatik_yenile = "Açık" in otomatik_yenile_secim or "On" in otomatik_yenile_secim
 
-st.sidebar.markdown("---")
-import base64
-st.sidebar.markdown("**Son Kamera Görüntüsü**" if secilen_dil == "TR" else "**Last Camera Capture**")
-if os.path.exists(RESIM_YOLU):
-    with open(RESIM_YOLU, "rb") as image_file:
-        encoded_string = base64.b64encode(image_file.read()).decode()
-    img_html = f"""
-    <div style="background: linear-gradient(145deg, rgba(15, 23, 42, 0.4), rgba(2, 6, 23, 0.6));
-                padding: 12px; border-radius: 18px; border: 1px dashed rgba(56, 189, 248, 0.3);
-                box-shadow: 0 4px 15px rgba(0,0,0,0.3); text-align: center; margin-bottom: 20px;">
-        <img src="data:image/jpeg;base64,{encoded_string}" style="border-radius: 12px; width: 75%; height: auto; border: 1px solid rgba(56, 189, 248, 0.2);">
-    </div>
-    """
-    st.sidebar.markdown(img_html, unsafe_allow_html=True)
-else:
-    st.sidebar.warning("Görsel yok" if secilen_dil == "TR" else "No image")
+# Kamera görüntüsü sidebar'dan kaldırıldı ve kendi özel sayfasına (Kamera & Görüş) taşındı.
 
+# Sistemi sıfırla butonu aşağıya taşındı
 detail_btn_text = "Durum Özeti" if secilen_dil == "TR" else "Status Summary"
 system_note_text = "Sistem Notu" if secilen_dil == "TR" else "System Note"
 
@@ -481,7 +461,7 @@ if not df_gecmis_ham.empty:
         islem_tr = row["Islem"]
         islem_en = "Taken" if row["Islem"] == "Alındı" else "Added"
         islem_metni = islem_tr if secilen_dil == "TR" else islem_en
-        ikon = "🔴" if row["Islem"] == "Alındı" else "🟢"
+        ikon = "⌘" if row["Islem"] == "Alındı" else "⚲"
         
         ticker_html += f"<div class='ticker-item'><span>[{saat_str}]</span> {urun_adi} {islem_metni} {ikon}</div>"
     ticker_html += "</div></div>"
@@ -590,34 +570,50 @@ yorum_trend = fe.yorum_kutusu(
 # DONANIM DURUMU & EXPORT (SIDEBAR)
 # ==========================================
 st.sidebar.markdown("---")
-st.sidebar.markdown("**⚙️ Donanım Durumu**" if secilen_dil == "TR" else "**⚙️ Hardware Status**")
+st.sidebar.markdown("**⚲ Donanım Durumu**" if secilen_dil == "TR" else "**⚲ Hardware Status**")
 
-import time
 def check_sensor(filepath, name_tr, name_en):
     if os.path.exists(filepath):
         mtime = os.path.getmtime(filepath)
         age_hours = (time.time() - mtime) / 3600
-        if age_hours > 24:
-            status = "Uyku Modu 🟡" if secilen_dil == "TR" else "Standby 🟡"
+        if age_hours > (15 / 60):  # 15 dakikadan eskiyse uyku modu/pasif
+            status = "Uyku Modu ❖" if secilen_dil == "TR" else "Standby ❖"
             color = "#ca8a04"
         else:
-            status = "Aktif 🟢" if secilen_dil == "TR" else "Online 🟢"
+            status = "Aktif ⚲" if secilen_dil == "TR" else "Online ⚲"
             color = "#16a34a"
     else:
-        status = "Bağlantı Yok 🔴" if secilen_dil == "TR" else "Offline 🔴"
+        status = "Bağlantı Yok ⌘" if secilen_dil == "TR" else "Offline ⌘"
         color = "#dc2626"
     
     label = name_tr if secilen_dil == "TR" else name_en
-    return f"<div style='display:flex; justify-content:space-between; margin-bottom:5px; font-size:13px; color:#cbd5e1;'><span>{label}:</span> <strong style='color:{color}'>{status}</strong></div>"
+    return f"<div style='display:flex; justify-content:space-between; align-items:center; margin-bottom:5px; font-size:13px; color:#cbd5e1;'><span>{label}:</span> <strong style='color:{color}; display:flex; align-items:center; gap:4px;'>{status}</strong></div>"
 
-hw_html = "<div style='background: rgba(15, 23, 42, 0.6); border: 1px solid rgba(56, 189, 248, 0.2); padding: 10px; border-radius: 12px; margin-bottom: 15px;'>"
+hw_html = "<div style='background: rgba(15, 23, 42, 0.6); border: 1px solid rgba(56, 189, 248, 0.2); padding: 12px; border-radius: 12px; margin-bottom: 20px; box-shadow: 0 4px 10px rgba(0,0,0,0.3);'>"
 hw_html += check_sensor(RESIM_YOLU, "Kamera (ESP32)", "Camera (ESP32)")
 hw_html += check_sensor(JSON_DURUM, "Load Cell (Tartı)", "Load Cell Sensors")
 hw_html += check_sensor(CSV_GECMIS, "Veritabanı API", "Database API")
 hw_html += "</div>"
 st.sidebar.markdown(hw_html, unsafe_allow_html=True)
 
-st.sidebar.markdown("**📥 Rapor Çıktısı / Export**" if secilen_dil == "TR" else "**📥 Export Report**")
+# ──── SİSTEMİ SIFIRLA VE CSV BUTONLARI (ALT ALTA) ────────────────────────────────────
+st.sidebar.markdown("**⌘ Sistem Kontrolü**" if secilen_dil == "TR" else "**⌘ System Control**")
+if st.sidebar.button(
+    "🗑️ Tüm Veriyi Sıfırla" if secilen_dil == "TR" else "🗑️ Full Reset",
+    use_container_width=True,
+    help="Stokları 0'a sıfırlar, geçmiş kayıtları temizler ve referans fotoğrafını siler. Test verilerini temizlemek için kullan."
+):
+    try:
+        resp = requests.post("http://localhost:5001/tam_sifirla", timeout=5)
+        if resp.status_code == 200:
+            st.sidebar.success("✅ Tüm veriler sıfırlandı!" if secilen_dil == "TR" else "✅ All data reset!")
+            time.sleep(0.5)
+            st.rerun()
+        else:
+            st.sidebar.error(f"Sunucu hatası: {resp.status_code}")
+    except Exception as e:
+        st.sidebar.error(f"Sunucu bağlantısı yok\n{e}")
+
 csv_lines = ["Urun_Adi,Mevcut_Stok,Fuzzy_Skoru,Aciliyet_Seviyesi\n"]
 for u in _fuzzy_urun:
     csv_lines.append(f"{u['urun']},{u['stok']},{u['skor']},{u['seviye']}\n")
@@ -636,7 +632,7 @@ st.sidebar.download_button(
 # RENDER FONKSİYONLARI (Kapsülleme)
 # ==========================================
 def draw_acilis():
-    render_mobile_ui("🚪", "Açılıp Kapanma Sayısı" if secilen_dil == "TR" else "Door Open Count", f"{dolap_acilma_sayisi} Kez" if secilen_dil == "TR" else f"{dolap_acilma_sayisi} Times", "Filtrelenen zaman aralığındaki açılış sayısı." if secilen_dil == "TR" else "Door accesses in the filtered time frame.", liste_acilis, system_note_text, yorum_acilis, detail_btn_text)
+    render_mobile_ui("✦", "Açılıp Kapanma Sayısı" if secilen_dil == "TR" else "Door Open Count", f"{dolap_acilma_sayisi} Kez" if secilen_dil == "TR" else f"{dolap_acilma_sayisi} Times", "Filtrelenen zaman aralığındaki açılış sayısı." if secilen_dil == "TR" else "Door accesses in the filtered time frame.", liste_acilis, system_note_text, yorum_acilis, detail_btn_text)
     
     # ------------------ SAATLİK YOĞUNLUK GRAFİĞİ ------------------
     if not df_gecmis.empty:
@@ -739,18 +735,24 @@ def get_product_svg(urun_adi):
     return f"data:image/svg+xml;base64,{b64}"
 
 def draw_stok():
-    render_mobile_ui("📦", "Stok Durumu" if secilen_dil == "TR" else "Stock Status", f"{toplam_stok} Ürün" if secilen_dil == "TR" else f"{toplam_stok} Items", "Dolapta bulunan toplam ürün miktarı ve stok dağılımı." if secilen_dil == "TR" else "Total items in fridge and stock distribution.", liste_stok, system_note_text, yorum_stok, detail_btn_text)
+    render_mobile_ui("❖", "Stok Durumu" if secilen_dil == "TR" else "Stock Status", f"{toplam_stok} Ürün" if secilen_dil == "TR" else f"{toplam_stok} Items", "Dolapta bulunan toplam ürün miktarı ve stok dağılımı." if secilen_dil == "TR" else "Total items in fridge and stock distribution.", liste_stok, system_note_text, yorum_stok, detail_btn_text)
     if pie_data:
         # Streamlit markdown parser indents as code blocks, so we remove leading spaces
         html = '<div style="display:flex; flex-wrap:wrap; gap:12px; justify-content:center; margin-bottom:20px; margin-top: 10px;">\n'
         for d in pie_data:
-            if d["Stok"] == 0: continue
             svg_uri = get_product_svg(d["Orijinal"])
             isim = d["Ürün"]
             stok = d["Stok"]
             
-            html += f'<div style="background: linear-gradient(145deg, rgba(30,41,59,0.6), rgba(15,23,42,0.8)); border: 1px solid rgba(56,189,248,0.2); border-radius:16px; padding:12px; width:115px; display:flex; flex-direction:column; align-items:center; box-shadow: 0 4px 15px rgba(0,0,0,0.3); position:relative;">'
-            html += f'<div style="position:absolute; top:8px; right:10px; background:#38bdf8; color:#0f172a; font-size:11px; font-weight:800; padding:2px 6px; border-radius:8px;">{stok}</div>'
+            # Stok 0 ise soluk göster
+            opacity = "1.0" if stok > 0 else "0.4"
+            filter_css = "grayscale(0%)" if stok > 0 else "grayscale(100%)"
+            
+            html += f'<div style="background: linear-gradient(145deg, rgba(30,41,59,0.6), rgba(15,23,42,0.8)); border: 1px solid rgba(56,189,248,0.2); border-radius:16px; padding:12px; width:115px; display:flex; flex-direction:column; align-items:center; box-shadow: 0 4px 15px rgba(0,0,0,0.3); position:relative; opacity:{opacity}; filter:{filter_css}; transition: all 0.3s ease;">'
+            if stok > 0:
+                html += f'<div style="position:absolute; top:8px; right:10px; background:#38bdf8; color:#0f172a; font-size:11px; font-weight:800; padding:2px 6px; border-radius:8px;">{stok}</div>'
+            else:
+                html += f'<div style="position:absolute; top:8px; right:10px; background:#ef4444; color:#fff; font-size:11px; font-weight:800; padding:2px 6px; border-radius:8px;">0</div>'
             html += f'<img src="{svg_uri}" style="width:75px; height:75px; margin-bottom:8px;">'
             html += f'<div style="color:#e2e8f0; font-size:11px; font-weight:600; text-align:center; line-height:1.2; height:28px; overflow:hidden; display:flex; align-items:center;">{isim}</div>'
             html += '</div>\n'
@@ -759,10 +761,10 @@ def draw_stok():
         st.markdown(html, unsafe_allow_html=True)
 
 def draw_siparis():
-    render_mobile_ui("🛒", "Sipariş Gerekenler" if secilen_dil == "TR" else "Items Needing Order", f"{len([x for x in liste_siparis if 'yok' not in x and 'No items' not in x])} Ürün" if secilen_dil == "TR" else f"{len([x for x in liste_siparis if 'yok' not in x and 'No items' not in x])} Items", "Stok seviyesine göre sipariş edilmesi gereken ürünler." if secilen_dil == "TR" else "Items to be ordered based on current burn rate.", liste_siparis, system_note_text, yorum_siparis, detail_btn_text)
+    render_mobile_ui("⚲", "Sipariş Gerekenler" if secilen_dil == "TR" else "Items Needing Order", f"{len([x for x in liste_siparis if 'yok' not in x and 'No items' not in x])} Ürün" if secilen_dil == "TR" else f"{len([x for x in liste_siparis if 'yok' not in x and 'No items' not in x])} Items", "Stok seviyesine göre sipariş edilmesi gereken ürünler." if secilen_dil == "TR" else "Items to be ordered based on current burn rate.", liste_siparis, system_note_text, yorum_siparis, detail_btn_text)
 
 def draw_trend():
-    render_mobile_ui("🏆", "En Çok Satılan Ürün" if secilen_dil == "TR" else "Top Selling Product", baslik_trend, "Seçili zaman aralığında satışı en yüksek ürün." if secilen_dil == "TR" else "Highest performing product in filtered time.", liste_trend, system_note_text, yorum_trend, detail_btn_text)
+    render_mobile_ui("⌘", "En Çok Satılan Ürün" if secilen_dil == "TR" else "Top Selling Product", baslik_trend, "Seçili zaman aralığında satışı en yüksek ürün." if secilen_dil == "TR" else "Highest performing product in filtered time.", liste_trend, system_note_text, yorum_trend, detail_btn_text)
     
     # ------------------ EN ÇOK SATANLAR GRAFİĞİ ------------------
     if not df_satis.empty:
@@ -800,7 +802,7 @@ def draw_trend():
 # ANA EKRAN YERLEŞİMİ (LAYOUT)
 # ==========================================
 if "Tahminler" in secilen_sayfa or "Smart Predictions" in secilen_sayfa:
-    st.markdown(f"<h2 style='color:white; margin-bottom: 20px;'>{'🧠 Akıllı Tahminler & Bulanık Mantık Merkezi' if secilen_dil == 'TR' else '🧠 Smart Predictions & Fuzzy Logic Center'}</h2>", unsafe_allow_html=True)
+    st.markdown(f"<h2 style='color:white; margin-bottom: 20px;'>{'❖ Akıllı Tahminler & Bulanık Mantık Merkezi' if secilen_dil == 'TR' else '❖ Smart Predictions & Fuzzy Logic Center'}</h2>", unsafe_allow_html=True)
     
     st.markdown(f"#### {'1. Genel Sistem Davranışı' if secilen_dil == 'TR' else '1. General System Behavior'}")
     c1, c2 = st.columns(2)
@@ -841,11 +843,261 @@ if "Tahminler" in secilen_sayfa or "Smart Predictions" in secilen_sayfa:
     _tavsiye_badge = fe.badge_html(t_sev, t_renk, dil=secilen_dil)
     tavsiye_html = fe.yorum_kutusu(f"🤖 {'Yapay Zeka Operasyon Önerisi' if secilen_dil == 'TR' else 'AI Operation Suggestion'} &nbsp; {_tavsiye_badge}", t_msg)
     st.markdown(tavsiye_html, unsafe_allow_html=True)
+    st.markdown("---")
+    st.markdown(f"#### {'4. ⏳ Stok Tükenme Tahmin Takvimi' if secilen_dil == 'TR' else '4. ⏳ Stock Depletion Forecast'}")
+    if secilen_dil == "TR":
+        st.caption("Mevcut tüketim hızı devam ederse her ürünün ne zaman biteceğini ve 24 saatlik tükenme riskini gösterir.")
+    else:
+        st.caption("Shows when each product will run out based on current consumption rate, plus 24-hour depletion risk.")
+
+    pred_rows = []
+    for u in _fuzzy_urun:
+        tuk  = u["tuketim_saatlik"]
+        stok = u["stok"]
+        bitis   = fe.tahmin_bitis_zamani(stok, tuk)
+        risk24  = fe.stok_tukenis_olasiligi(stok, tuk, 24)
+        risk_str = f"%{risk24}"
+        pred_rows.append({
+            ("Ürün" if secilen_dil=="TR" else "Product"): u["urun"].replace("_", " "),
+            ("Stok" if secilen_dil=="TR" else "Stock"): stok,
+            ("Fuzzy Skor" if secilen_dil=="TR" else "Fuzzy Score"): u["skor"],
+            ("24s Risk" if secilen_dil=="TR" else "24h Risk"): risk_str,
+            ("Tahmini Bitiş" if secilen_dil=="TR" else "Est. Depletion"): bitis.get("tarih") or "—",
+        })
+
+    if not pred_rows:
+        st.info("Yeterli tüketim verisi yok." if secilen_dil == "TR" else "Not enough consumption data.")
+    else:
+        # Kod görünümü (st.dataframe) yerine şık bir HTML tablo tasarımı
+        table_html = "<div style='overflow-x:auto;'><table style='width:100%; border-collapse: collapse; text-align: left;'>"
+        headers = list(pred_rows[0].keys())
+        table_html += "<thead><tr style='border-bottom: 2px solid rgba(56,189,248,0.3);'>"
+        for h in headers:
+            table_html += f"<th style='padding: 14px; color:#94a3b8; font-weight:600; font-size:14px;'>{h}</th>"
+        table_html += "</tr></thead><tbody>"
+        for i, row in enumerate(pred_rows):
+            bg = "background: rgba(15,23,42,0.5);" if i % 2 == 0 else "background: rgba(30,41,59,0.3);"
+            table_html += f"<tr style='border-bottom: 1px solid rgba(56,189,248,0.1); {bg}'>"
+            for val in row.values():
+                table_html += f"<td style='padding: 14px; color:#e2e8f0; font-size:14px; font-weight:500;'>{val}</td>"
+            table_html += "</tr>"
+        table_html += "</tbody></table></div>"
+        
+        st.markdown(
+            f"<div style='background: linear-gradient(145deg, rgba(15,23,42,0.6), rgba(2,6,23,0.8)); border: 1px solid rgba(56,189,248,0.2); border-radius:18px; padding:20px;'>{table_html}</div>", 
+            unsafe_allow_html=True
+        )
+
+    st.markdown("---")
+    st.markdown(f"#### {'5. 🧬 Fuzzy Kural Motor Analizi (Mamdani)' if secilen_dil == 'TR' else '5. 🧬 Fuzzy Rule Engine Analysis (Mamdani)'}")
+
+    if secilen_dil == "TR":
+        st.caption("Sistem hangi bulanık kuralları ateşledi ve aktivasyon gücü ne kadar? En kritik ürün için kural tabanı görselleştirilmiştir.")
+    else:
+        st.caption("Which fuzzy rules fired and how strongly? Rule-base visualized for the most critical product.")
+
+    en_kritik_urun = max(_fuzzy_urun, key=lambda x: x["skor"], default=None)
+    if en_kritik_urun:
+        bas_stok = katalog.get(en_kritik_urun["urun"], {}).get("baslangic_stok", 20)
+        r_norm   = en_kritik_urun["stok"] / max(bas_stok, 1)
+        h_norm   = min(en_kritik_urun["tuketim_saatlik"], 5.0)
+        ates_lst = fe.kural_ates_detayi(r_norm, h_norm, dil=secilen_dil)
+
+        urun_adi_goster = en_kritik_urun["urun"].replace("_", " ")
+        st.markdown(f"**{('Analiz edilen ürün' if secilen_dil=='TR' else 'Analyzed product')}:** {urun_adi_goster}  "
+                    f"| Stok oranı: `{r_norm:.2f}` | Tüketim hızı: `{h_norm:.3f}` birim/saat")
+
+        if ates_lst:
+            renk_map = {"Yuksek": "#dc2626", "Orta": "#ca8a04", "Dusuk": "#16a34a"}
+            rows_html = ""
+            for k in ates_lst:
+                bar_c = renk_map.get(k["cikti"], "#64748b")
+                rows_html += (f"<div style='margin-bottom:14px;'>"
+                    f"<div style='color:#cbd5e1; font-size:13.5px; margin-bottom:5px; font-family:\"Inter\", \"Helvetica Neue\", sans-serif; font-weight:600;'>{k['kural']}</div>"
+                    f"<div style='display:flex; align-items:center; gap:12px;'>"
+                    f"<div style='flex:1; background:rgba(51,65,85,0.6); border-radius:8px; height:14px; overflow:hidden; border:1px solid rgba(255,255,255,0.05);'>"
+                    f"<div style='width:{k['yuzde']}%; height:100%; background:{bar_c}; border-radius:8px;'></div>"
+                    f"</div>"
+                    f"<div style='color:#e2e8f0; font-size:13px; font-weight:700; min-width:55px; text-align:right;'>%{k['yuzde']}</div>"
+                    f"</div></div>")
+            st.markdown(
+                f"<div style='background:rgba(15,23,42,0.7); border:1px solid rgba(56,189,248,0.25); border-radius:18px; padding:24px; margin-top:8px;'>{rows_html}</div>",
+                unsafe_allow_html=True
+            )
+
+            # Kural çıktı dağılımı — Pie chart
+            cikti_sayim = {"Yuksek": 0, "Orta": 0, "Dusuk": 0}
+            for k in ates_lst:
+                cikti_sayim[k["cikti"]] += k["ates"]
+            if sum(cikti_sayim.values()) > 0:
+                cikti_etiket = {
+                    "Yuksek": "Yüksek Aciliyet" if secilen_dil=="TR" else "High Urgency",
+                    "Orta":   "Orta Aciliyet"   if secilen_dil=="TR" else "Medium Urgency",
+                    "Dusuk":  "Düşük Aciliyet"  if secilen_dil=="TR" else "Low Urgency",
+                }
+                labels = [cikti_etiket[k] for k in cikti_sayim]
+                values = list(cikti_sayim.values())
+                colors = ["#dc2626", "#ca8a04", "#16a34a"]
+                fig_pie = go.Figure(go.Pie(
+                    labels=labels, values=values,
+                    marker=dict(colors=colors, line=dict(color="#0f172a", width=2)),
+                    hole=0.4, textfont_size=13,
+                    textfont_family="Inter, Helvetica Neue, sans-serif"
+                ))
+                fig_pie.update_layout(
+                    height=230, paper_bgcolor="rgba(0,0,0,0)",
+                    margin=dict(t=10, b=10, l=10, r=10), showlegend=True,
+                    legend=dict(font=dict(color="#cbd5e1", size=12)),
+                    title=dict(
+                        text="Kural Çıktı Dağılımı" if secilen_dil=="TR" else "Rule Output Distribution",
+                        font=dict(color="#94a3b8", size=13), x=0.5
+                    )
+                )
+                st.plotly_chart(fig_pie, use_container_width=True)
+        else:
+            st.info("Bu ürün için aktif kural bulunamadı." if secilen_dil=="TR" else "No active rules found for this product.")
+elif "Canlı Operasyon" in secilen_sayfa or "Live Operations" in secilen_sayfa:
+    st.markdown(f"### {'⚲ Canlı Operasyon Akışı' if secilen_dil == 'TR' else '⚲ Live Operations Feed'}")
+    if secilen_dil == "TR":
+        st.caption("Fiziksel dolaptaki hareketlerin (Ekleme/Alma) anlık detaylı log kayıtları.")
+    else:
+        st.caption("Real-time detailed log of physical cabinet actions (Added/Removed).")
+    
+    # 1. En son olayı çok detaylı (terminaldeki gibi) göster
+    if durum.get("son_olay") and durum["son_olay"]["zaman"] != "-":
+        son = durum["son_olay"]
+        st.markdown(f"#### {'✦ Son Canlı Algılama' if secilen_dil == 'TR' else '✦ Last Live Detection'}")
+        
+        islem_text = son.get("yapilan_islem", "")
+        if "Alındı" in islem_text:
+            renk, ikon, baslik = "#ef4444", "⌘", "ÜRÜN ALINDI!" if secilen_dil=="TR" else "PRODUCT REMOVED!"
+            bg = "rgba(239,68,68,0.1)"
+            brd = "rgba(239,68,68,0.3)"
+        elif "Eklendi" in islem_text:
+            renk, ikon, baslik = "#22c55e", "⚲", "ÜRÜN EKLENDİ!" if secilen_dil=="TR" else "PRODUCT ADDED!"
+            bg = "rgba(34,197,94,0.1)"
+            brd = "rgba(34,197,94,0.3)"
+        else:
+            renk, ikon, baslik = "#38bdf8", "✦", "SİSTEM MESAJI" if secilen_dil=="TR" else "SYSTEM MESSAGE"
+            bg = "rgba(56,189,248,0.1)"
+            brd = "rgba(56,189,248,0.3)"
+            
+        urun = son.get("kategori", "").replace("_", " ")
+        slot = son.get("slot", "")
+        eminlik = son.get("eminlik", 0.0)
+        agirlik = son.get("agirlik_degisimi", "0")
+        zaman = son.get("zaman", "-")
+        
+        detay_html = f"""
+        <div class='apple-box' style='border-left: 4px solid {renk};'>
+            <div style='display:flex; justify-content:space-between; align-items:center; margin-bottom:16px;'>
+                <div style='font-size:22px; font-weight:800; color:{renk}; letter-spacing:1px;'>{ikon} {baslik}</div>
+                <div style='color:#94a3b8; font-size:14px; font-family:monospace;'>✦ {zaman}</div>
+            </div>
+            <div style='display:grid; grid-template-columns: 1fr 1fr; gap:16px;'>
+                <div style='font-size:16px; color:#e2e8f0;'><span style='color:#94a3b8;'>⚲ Slot:</span> &nbsp;&nbsp;&nbsp;<strong>{slot}</strong></div>
+                <div style='font-size:16px; color:#e2e8f0;'><span style='color:#94a3b8;'>❖ Ağırlık:</span> <strong>{agirlik}g</strong></div>
+                <div style='font-size:16px; color:#e2e8f0;'><span style='color:#94a3b8;'>❖ Ürün:</span> &nbsp;&nbsp;<strong>{urun}</strong></div>
+                <div style='font-size:16px; color:#e2e8f0;'><span style='color:#94a3b8;'>✦ Eminlik:</span> <strong>%{eminlik}</strong></div>
+            </div>
+            <div style='margin-top:16px; padding-top:16px; border-top:1px solid rgba(255,255,255,0.1); color:{renk}; font-weight:600; font-size:15px; text-align:center;'>
+                ✦ Kayıt: {islem_text} | Eminlik: %{eminlik}
+            </div>
+        </div>
+        """
+        st.markdown(detay_html, unsafe_allow_html=True)
+    
+    st.markdown("---")
+    st.markdown(f"#### {'📜 Geçmiş Operasyonlar' if secilen_dil == 'TR' else '📜 Historical Operations'}")
+    
+    if df_gecmis_ham.empty:
+        st.info("Henüz kaydedilmiş bir hareket bulunmuyor." if secilen_dil == "TR" else "No actions recorded yet.")
+    else:
+        # En yeniler en üstte
+        df_feed = df_gecmis_ham.copy().sort_values(by="Tarih", ascending=False)
+        
+        feed_html = "<div style='display:flex; flex-direction:column; gap:12px;'>"
+        for _, row in df_feed.iterrows():
+            islem = row["Islem"]
+            urun = row["Urun"].replace("_", " ")
+            tarih = row["Tarih"].strftime('%Y-%m-%d %H:%M:%S')
+            
+            if "Al" in islem or "Remove" in islem:
+                renk = "#ef4444"
+                ikon = "⌘"
+                baslik = "ALINDI" if secilen_dil == "TR" else "REMOVED"
+                bg_grad = "linear-gradient(90deg, rgba(239, 68, 68, 0.1) 0%, rgba(15, 23, 42, 0.4) 100%)"
+                border = "border-left: 4px solid #ef4444;"
+            else:
+                renk = "#22c55e"
+                ikon = "⚲"
+                baslik = "EKLENDİ" if secilen_dil == "TR" else "ADDED"
+                bg_grad = "linear-gradient(90deg, rgba(34, 197, 94, 0.1) 0%, rgba(15, 23, 42, 0.4) 100%)"
+                border = "border-left: 4px solid #22c55e;"
+                
+            feed_html += (f"<div class='apple-box' style='{border} padding: 16px; margin-bottom: 12px; display:flex; justify-content:space-between; align-items:center;'>"
+                f"<div style='display:flex; align-items:center; gap:16px;'>"
+                f"<div style='font-size:18px;'>{ikon}</div>"
+                f"<div><div style='color:#e2e8f0; font-size:15px; font-weight:600;'>{urun}</div>"
+                f"<div style='color:{renk}; font-size:13px; font-weight:700;'>{baslik} (1 Adet)</div></div>"
+                f"</div>"
+                f"<div style='color:#94a3b8; font-size:12px; font-family:monospace; text-align:right;'>✦ {tarih}</div>"
+                f"</div>")
+        feed_html += "</div>"
+        st.markdown(feed_html, unsafe_allow_html=True)
+
+elif "Kamera" in secilen_sayfa or "Camera" in secilen_sayfa:
+    st.markdown(f"### {'⌘ Kamera ve Bilgisayarlı Görüş (Computer Vision)' if secilen_dil == 'TR' else '⌘ Camera & Computer Vision'}")
+    if secilen_dil == "TR":
+        st.caption("Fiziksel dolaptan gelen ham görüntüler ve AI modeline gönderilen kırpılmış slot (raf) kareleri.")
+    else:
+        st.caption("Raw images from the physical cabinet and cropped slot frames sent to the AI model.")
+    
+    st.markdown("---")
+    
+    def render_img_card(path, title, border_color="#38bdf8", height="auto", object_fit="contain"):
+        if os.path.exists(path):
+            with open(path, "rb") as f:
+                b64 = base64.b64encode(f.read()).decode()
+            html = f"<div style='background: rgba(15, 23, 42, 0.6); padding: 12px; border-radius: 16px; border: 1px solid rgba(255, 255, 255, 0.1); border-radius: 28px; box-shadow: 0 20px 40px rgba(0, 0, 0, 0.4); text-align: center; height: 100%; display: flex; flex-direction: column; justify-content: space-between;'>"
+            html += f"<div style='color:#e2e8f0; font-size:15px; font-weight:700; margin-bottom:12px; letter-spacing:1px;'>{title}</div>"
+            if height == "auto":
+                html += f"<img src='data:image/jpeg;base64,{b64}' style='border-radius: 12px; width: 100%; height: auto; border: 1px solid rgba(56, 189, 248, 0.1); margin: auto 0;'>"
+            else:
+                html += f"<img src='data:image/jpeg;base64,{b64}' style='border-radius: 12px; width: 100%; height: {height}; object-fit: {object_fit}; border: 1px solid rgba(56, 189, 248, 0.1); margin: auto 0;'>"
+            html += "</div>"
+            return html
+        else:
+            html = "<div style='background: rgba(15, 23, 42, 0.4); padding: 30px 12px; border-radius: 16px; border: 1px solid rgba(255, 255, 255, 0.05); border-radius: 28px; box-shadow: 0 10px 30px rgba(0,0,0,0.2); text-align: center; color: #64748b; font-weight: 600; height: 100%; display: flex; align-items: center; justify-content: center;'>"
+            html += f"<div>⌘ {title} <br><span style='font-size:12px; font-weight:400;'>(Görsel Yok / No Image)</span></div>"
+            html += "</div>"
+            return html
+
+    st.markdown(f"#### {'⚲ Ana Görüntüler (Öncesi / Sonrası)' if secilen_dil == 'TR' else '⚲ Main Captures (Before / After)'}")
+    col1, col2 = st.columns(2)
+    with col1:
+        st.markdown(render_img_card("dolap_oncesi.jpg", "Mevcut Referans (Öncesi)", height="auto"), unsafe_allow_html=True)
+    with col2:
+        st.markdown(render_img_card("dolap_sonrasi.jpg", "Yeni Algılanan (Sonrası)", border_color="#facc15", height="auto"), unsafe_allow_html=True)
+        
+    st.markdown("<br><br>", unsafe_allow_html=True)
+    
+    st.markdown(f"#### {'❖ AI Tarafından Kırpılan Slotlar' if secilen_dil == 'TR' else '❖ Slots Cropped by AI'}")
+    c1, c2, c3 = st.columns(3)
+    with c1:
+        st.markdown(render_img_card("debug_kesilen_Slot_1.jpg", "Slot 1 (Sol)", height="450px", object_fit="contain"), unsafe_allow_html=True)
+    with c2:
+        st.markdown(render_img_card("debug_kesilen_Slot_2.jpg", "Slot 2 (Orta)", height="450px", object_fit="contain"), unsafe_allow_html=True)
+    with c3:
+        st.markdown(render_img_card("debug_kesilen_Slot_3.jpg", "Slot 3 (Sağ)", height="450px", object_fit="contain"), unsafe_allow_html=True)
+        
+    st.markdown("<br>", unsafe_allow_html=True)
+
 else:
     if "Mobil" in arayuz_tipi or "Mobile" in arayuz_tipi:
         col_left, col_mid, col_right = st.columns([1, 2, 1])
         with col_mid:
-            tab_isimleri = ["🚪 Kapak", "📦 Stok", "🛒 Sipariş", "🏆 Analiz"] if secilen_dil == "TR" else ["🚪 Access", "📦 Stock", "🛒 Orders", "🏆 Analytics"]
+            tab_isimleri = ["✦ Kapak", "❖ Stok", "⚲ Sipariş", "⌘ Analiz"] if secilen_dil == "TR" else ["✦ Access", "❖ Stock", "⚲ Orders", "⌘ Analytics"]
             t1, t2, t3, t4 = st.tabs(tab_isimleri)
             with t1: draw_acilis()
             with t2: draw_stok()

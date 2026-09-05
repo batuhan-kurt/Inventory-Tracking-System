@@ -179,7 +179,7 @@ def stok_tab_analiz(urun_analizler, dil="TR"):
     if dil == "TR":
         if kritik:
             isimler = ", ".join(u["urun"].replace("_", " ") for u in kritik[:3])
-            parcalar.append(f"<strong style='color:#f87171;'>⚡ KRİTİK ({len(kritik)} ürün):</strong> {isimler}")
+            parcalar.append(f"<strong style='color:#f87171;'>✦ KRİTİK ({len(kritik)} ürün):</strong> {isimler}")
         if orta:
             isimler = ", ".join(u["urun"].replace("_", " ") for u in orta[:2])
             parcalar.append(f"<strong style='color:#fb923c;'>⚠ ORTA ({len(orta)} ürün):</strong> {isimler}")
@@ -189,7 +189,7 @@ def stok_tab_analiz(urun_analizler, dil="TR"):
     else:
         if kritik:
             isimler = ", ".join(u["urun"].replace("_", " ") for u in kritik[:3])
-            parcalar.append(f"<strong style='color:#f87171;'>⚡ CRITICAL ({len(kritik)} items):</strong> {isimler}")
+            parcalar.append(f"<strong style='color:#f87171;'>✦ CRITICAL ({len(kritik)} items):</strong> {isimler}")
         if orta:
             isimler = ", ".join(u["urun"].replace("_", " ") for u in orta[:2])
             parcalar.append(f"<strong style='color:#fb923c;'>⚠ MEDIUM ({len(orta)} items):</strong> {isimler}")
@@ -213,10 +213,10 @@ def siparis_tab_analiz(urun_analizler, dil="TR"):
     for u in sorted(kritik, key=lambda x: x["skor"], reverse=True):
         if dil == "TR":
             sure_str = f" (~{u['tahmini_sure']}s)" if u["tahmini_sure"] else ""
-            satirlar.append(f"<span style='color:#f87171;'>⚡ KRİTİK</span> <strong>{u['urun'].replace('_',' ')}</strong>{sure_str} — Skor: {u['skor']}/100")
+            satirlar.append(f"<span style='color:#f87171;'>✦ KRİTİK</span> <strong>{u['urun'].replace('_',' ')}</strong>{sure_str} — Skor: {u['skor']}/100")
         else:
             sure_str = f" (~{u['tahmini_sure']}h)" if u["tahmini_sure"] else ""
-            satirlar.append(f"<span style='color:#f87171;'>⚡ CRITICAL</span> <strong>{u['urun'].replace('_',' ')}</strong>{sure_str} — Score: {u['skor']}/100")
+            satirlar.append(f"<span style='color:#f87171;'>✦ CRITICAL</span> <strong>{u['urun'].replace('_',' ')}</strong>{sure_str} — Score: {u['skor']}/100")
             
     for u in sorted(orta, key=lambda x: x["skor"], reverse=True):
         if dil == "TR":
@@ -236,6 +236,11 @@ def siparis_tab_analiz(urun_analizler, dil="TR"):
     return {"aciklama": aciklama, "kritik_sayisi": len(kritik), "orta_sayisi": len(orta)}
 
 def trend_tab_analiz(satis_son7gun, satis_son3gun, en_cok_satan, en_cok_satis, dil="TR"):
+    if satis_son7gun < 2:
+        seviye, renk = "YETERSİZ VERİ" if dil=="TR" else "NOT ENOUGH DATA", "#64748b"
+        aciklama = "Trend analizi için daha fazla satış verisi gereklidir." if dil=="TR" else "More sales data is required for trend analytics."
+        return {"ivme_seviyesi": seviye, "renk": renk, "aciklama": aciklama}
+
     onceki4 = satis_son7gun - satis_son3gun
     onceki4_gunluk = onceki4 / 4.0 if onceki4 > 0 else 0.001
     son3_gunluk    = satis_son3gun / 3.0 if satis_son3gun > 0 else 0.0
@@ -281,7 +286,101 @@ def badge_html(seviye, renk, skor=None, dil="TR"):
 
 def yorum_kutusu(on_html, aciklama_html):
     return (
-        f'<div style="margin-bottom:8px;">{on_html}</div>'
-        f'<div style="line-height:1.7; color:#94a3b8; font-size:13px;">'
+        f'<div class="apple-box" style="margin-bottom: 20px;">'
+        f'<div style="margin-bottom:12px;">{on_html}</div>'
+        f'<div style="line-height:1.7; color:#e2e8f0; font-size:15px;">'
         f'{aciklama_html}</div>'
+        f'</div>'
     )
+
+
+# ══════════════════════════════════════════════════════════════════
+#  5. GELİŞMİŞ ANALİZ — KURAL MOTORU DETAYI & TAHMİNLER
+# ══════════════════════════════════════════════════════════════════
+
+_KURAL_ACIKLAMALARI = {
+    "TR": [
+        "KRİTİK stok ∧ HIZLI tüketim  →  YÜKSEK aciliyet",
+        "KRİTİK stok ∧ NORMAL tüketim →  YÜKSEK aciliyet",
+        "KRİTİK stok ∧ YAVAŞ tüketim  →  ORTA aciliyet",
+        "DÜŞÜK stok  ∧ HIZLI tüketim  →  YÜKSEK aciliyet",
+        "DÜŞÜK stok  ∧ NORMAL tüketim →  ORTA aciliyet",
+        "DÜŞÜK stok  ∧ YAVAŞ tüketim  →  DÜŞÜK aciliyet",
+        "ORTA stok   ∧ HIZLI tüketim  →  ORTA aciliyet",
+        "ORTA stok   ∧ NORMAL tüketim →  DÜŞÜK aciliyet",
+        "ORTA stok   ∧ YAVAŞ tüketim  →  DÜŞÜK aciliyet",
+        "YETERLİ stok ∧ HIZLI tüketim →  DÜŞÜK aciliyet",
+        "YETERLİ stok ∧ NORMAL tüketim → DÜŞÜK aciliyet",
+        "YETERLİ stok ∧ YAVAŞ tüketim  → DÜŞÜK aciliyet",
+    ],
+    "EN": [
+        "CRITICAL stock ∧ FAST consumption  →  HIGH urgency",
+        "CRITICAL stock ∧ NORMAL consumption →  HIGH urgency",
+        "CRITICAL stock ∧ SLOW consumption  →  MEDIUM urgency",
+        "LOW stock      ∧ FAST consumption  →  HIGH urgency",
+        "LOW stock      ∧ NORMAL consumption →  MEDIUM urgency",
+        "LOW stock      ∧ SLOW consumption  →  LOW urgency",
+        "MEDIUM stock   ∧ FAST consumption  →  MEDIUM urgency",
+        "MEDIUM stock   ∧ NORMAL consumption →  LOW urgency",
+        "MEDIUM stock   ∧ SLOW consumption  →  LOW urgency",
+        "SUFFICIENT stock ∧ FAST consumption →  LOW urgency",
+        "SUFFICIENT stock ∧ NORMAL consumption → LOW urgency",
+        "SUFFICIENT stock ∧ SLOW consumption  → LOW urgency",
+    ]
+}
+
+
+def kural_ates_detayi(stok_norm, hiz, dil="TR"):
+    """
+    Verilen stok oranı ve tüketim hızı için hangi Mamdani kurallarının
+    ateşlendiğini ve aktivasyon güçlerini döndürür.
+    Döndürür: list of dicts — {'kural', 'ates', 'yuzde', 'cikti'}
+    """
+    r = max(0.0, min(1.0, stok_norm))
+    h = max(0.0, min(5.0, hiz))
+
+    aciklamalar = _KURAL_ACIKLAMALARI.get(dil, _KURAL_ACIKLAMALARI["TR"])
+    sonuclar = []
+    for i, (stok_fn, hiz_fn, cikti) in enumerate(KURALLAR):
+        ates = min(stok_fn(r), hiz_fn(h))
+        if ates > 0.01:
+            sonuclar.append({
+                "kural":  aciklamalar[i],
+                "ates":   round(ates, 3),
+                "yuzde":  round(ates * 100, 1),
+                "cikti":  cikti,
+            })
+    sonuclar.sort(key=lambda x: x["ates"], reverse=True)
+    return sonuclar
+
+
+def tahmin_bitis_zamani(stok, tuketim_saatlik):
+    """
+    Mevcut tüketim hızına göre stoğun biteceği tarihi tahmin eder.
+    Döndürür: dict — {'saat', 'tarih', 'aciklama'}
+    """
+    from datetime import datetime, timedelta
+
+    if tuketim_saatlik <= 0.001 or stok <= 0:
+        return {"saat": None, "tarih": None, "aciklama": "—"}
+
+    kalan_saat = stok / tuketim_saatlik
+    bitis      = datetime.now() + timedelta(hours=kalan_saat)
+    return {
+        "saat":      round(kalan_saat, 1),
+        "tarih":     bitis.strftime("%d.%m.%Y %H:%M"),
+        "aciklama":  f"{round(kalan_saat, 1)} saat sonra",
+    }
+
+
+def stok_tukenis_olasiligi(stok, tuketim_saatlik, sure_saat=24):
+    """
+    Gelecek N saatte stok tükenme olasılığını hesaplar (0-100).
+    """
+    if stok <= 0:
+        return 100.0
+    if tuketim_saatlik <= 0.001:
+        return 0.0
+    tahmini = tuketim_saatlik * sure_saat
+    return round(min(100.0, (tahmini / stok) * 100), 1)
+

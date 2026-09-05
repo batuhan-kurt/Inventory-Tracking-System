@@ -1,47 +1,55 @@
-# Sanal ortamı (ai_ortami_v2) dahil etme — 400MB+ gereksiz
-ai_ortami_v2/
+# ══════════════════════════════════════════════════
+# AKILLI DOLAP — .gitignore
+# ══════════════════════════════════════════════════
+
+# ── Sanal Ortamlar ─────────────────────────────────
+ai_ortami/
 ai_ortami*/
+dolap_venv/
 venv/
 .venv/
 env/
 
-# Büyük veri dosyaları — GitHub 100MB limitini aşar
+# ── Büyük Veri Dosyaları (GitHub 100MB limiti) ─────
 X_verileri.npy
 Y_etiketler.npy
 
-# Eğitilmiş model — büyük dosya, Git LFS gerektirir
-# (İstersen Git LFS ile yükleyebilirsin, şimdilik hariç)
+# ── Eğitilmiş Model (13MB — Git LFS ile yüklenebilir) ─
 akilli_dolap_beyni.keras
 
-# Dataset klasörleri — binlerce görüntü, repo'yu şişirir
+# ── Dataset Klasörleri (binlerce görüntü) ──────────
 dataset/
 dataset_dengeli/
 test_grubu/
 
-# Geçici ve debug dosyaları
+# ── Geçici & Debug Görüntüleri ─────────────────────
 debug_kesilen_*.jpg
 gecici_esp32.jpg
 dolap_oncesi.jpg
 dolap_sonrasi.jpg
 test_resmi.jpeg
 
-# Kişisel / özel dosyalar
-Gecmis_Sohbet_Kaydi.md
+# ── İşe Yaramaz Yardımcı Scriptler ────────────────
+generate_mock_data.py
+sistem_testi.py
+PROJE_KILAVUZU.md
 
-# macOS sistem dosyası
+# ── macOS Sistem Dosyaları ─────────────────────────
 .DS_Store
+**/.DS_Store
 
-# Python cache
+# ── Python Cache ───────────────────────────────────
 __pycache__/
 *.pyc
 *.pyo
 *.pyd
 
-# Streamlit cache
+# ── Streamlit Cache ────────────────────────────────
 .streamlit/
 
-# IDE
+# ── IDE / Editör ───────────────────────────────────
 .vscode/
 .idea/
-__pycache__/
+
+# ── Bitirme Çıktıları (rapor üretim scriptleri) ────
 bitirme_ciktilari/
