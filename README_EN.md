@@ -354,9 +354,6 @@ python veri_hazirla.py    # → X_verileri.npy, Y_etiketler.npy
 
 # 4. Train CNN (50 epochs max, early stopping at ~20-30)
 python beyin_egit.py      # → akilli_dolap_beyni.keras
-
-# 5. Batch accuracy test
-python tahmin_yap_toplu.py
 ```
 
 ---
@@ -409,9 +406,9 @@ Inventory-Tracking-System/
 │   └── dashboard.py           # 1118-line Streamlit premium UI
 │
 ├── 📂 DATA
-│   ├── data/urun_katalogu.json     # Product metadata + price + reorder threshold
-│   ├── data/sistem_durumu.json     # Live stock status
-│   └── data/satis_gecmisi.csv      # Timestamped sales history
+│   ├── urun_katalogu.json     # Product metadata + price + reorder threshold
+│   ├── sistem_durumu.json     # Live stock status
+│   └── satis_gecmisi.csv      # Timestamped sales history
 │
 ├── 📚 DOCS
 │   ├── docs/BOM.xlsx          # Bill of Materials

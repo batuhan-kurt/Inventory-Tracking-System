@@ -29,11 +29,6 @@ dolap_oncesi.jpg
 dolap_sonrasi.jpg
 test_resmi.jpeg
 
-# ── İşe Yaramaz Yardımcı Scriptler ────────────────
-generate_mock_data.py
-sistem_testi.py
-PROJE_KILAVUZU.md
-
 # ── macOS Sistem Dosyaları ─────────────────────────
 .DS_Store
 **/.DS_Store

@@ -356,9 +356,6 @@ python veri_hazirla.py    # → X_verileri.npy, Y_etiketler.npy
 
 # 4. CNN modelini eğit (50 epoch, early stopping ile ~20-30 epoch)
 python beyin_egit.py      # → akilli_dolap_beyni.keras
-
-# 5. Toplu test
-python tahmin_yap_toplu.py
 ```
 
 ---
@@ -411,9 +408,9 @@ Inventory-Tracking-System/
 │   └── dashboard.py           # 1118 satır Streamlit premium UI
 │
 ├── 📂 DATA
-│   ├── data/urun_katalogu.json     # Ürün metadata + fiyat + kritik eşik
-│   ├── data/sistem_durumu.json     # Anlık stok durumu
-│   └── data/satis_gecmisi.csv      # Zaman damgalı satış geçmişi
+│   ├── urun_katalogu.json     # Ürün metadata + fiyat + kritik eşik
+│   ├── sistem_durumu.json     # Anlık stok durumu
+│   └── satis_gecmisi.csv      # Zaman damgalı satış geçmişi
 │
 ├── 📚 DOCS
 │   ├── docs/BOM.xlsx          # Bill of Materials (donanım maliyet listesi)
