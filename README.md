@@ -58,13 +58,13 @@ Bu sistem **mevcut hâliyle bir mini buzdolabı prototipidir.** Ancak mimarisi b
 ## 🧠 Nasıl Çalışır? — Adım Adım
 
 ### 1️⃣ Ağırlık Tabanlı Tetikleme (Hardware Interrupt)
-- **HX711** yük hücresi rafın ağırlığını sürekli ölçer (örnekleme frekansı: 10 Hz).
-- **50 gramdan fazla** değişim tespit edildiğinde ESP32 harekete geçer.
-- Bir kutu içecek ortalama **230–290 gram** olduğundan, sahte alarmlar bu eşikle filtrelenir.
+- **HX711** yük hücresi rafın ağırlığını sürekli ölçer (5 örnekle hareketli ortalama, gürültü bastırma).
+- **85 gramdan fazla** değişim tespit edildiğinde ESP32 harekete geçer.
+- Bir kutu içecek ortalama **230–290 gram** olduğundan, bu eşik küçük titreşimleri filtreler.
 
 ### 2️⃣ Akıllı Fotoğraf Çekimi
-- ESP32-S3, **OV5640 kamera** ile **2 saniye stabilizasyon** sonrası fotoğraf çeker.
-- Bu bekleme, müşterinin elinin görüntüye girmesini önler (motion blur koruması).
+- ESP32-S3, **OV5640 kamera** ile **8 ısınma karesi + 150ms bekleme** sonrası fotoğraf çeker (VGA 640×480).
+- Bu bekleme, hem müşterinin elinin görüntüye girmesini hem de kamera sensörünün kararlı hale gelmesini sağlar.
 - Fotoğraf **Wi-Fi üzerinden HTTP POST** ile Python sunucusuna aktarılır.
 
 ### 3️⃣ Görüntü Hizalama (ORB Feature Matching)
@@ -261,13 +261,17 @@ Dashboard dört ayrı sayfa ve iki arayüz moduna (📱 Mobil / 💻 Web) sahipt
 | Bileşen | Model | Adet | Notlar |
 |---|---|---|---|
 | Mikrodenetleyici | ESP32-S3 | 1 | Dahili Wi-Fi + Bluetooth |
-| Kamera | OV5640 (5MP) | 1 | PCB üzerine custom pinout |
-| Load Cell Amplifier | HX711 | 1 | 24-bit ADC |
+| Kamera | OV5640 (5MP, VGA 640×480) | 1 | PCB üzerine custom pinout |
+| Load Cell Amplifier | HX711 | 1 | 24-bit ADC, 10 Hz örnekleme |
 | Yük Hücresi | 1–5 kg | 1 | Raf kapasitesine göre |
+| Voltaj Regülatörü | AMS1117 3.3V | 1 | ESP32-S3 güç besleme |
+| PCB | Custom / Hazır | 1 | Kamera + ESP32 entegrasyonu |
+| Jumper Kablo Seti | — | — | Sensör bağlantıları |
 
 ### ESP32-S3 PCB Pin Haritası (OV5640)
 
 ```
+OV5640 Kamera Pinleri:
 PWDN  → GPIO 21    RESET → GPIO 18    XCLK → GPIO 10
 SIOD  → GPIO 40    SIOC  → GPIO 39    VSYNC → GPIO 6
 HREF  → GPIO 7     PCLK  → GPIO 13
@@ -275,7 +279,8 @@ HREF  → GPIO 7     PCLK  → GPIO 13
 D0 → GPIO 11   D1 → GPIO 9    D2 → GPIO 8    D3 → GPIO 12
 D4 → GPIO 17   D5 → GPIO 16   D6 → GPIO 15   D7 → GPIO 14
 
-HX711 DOUT → GPIO 4    HX711 SCK → GPIO 5
+HX711 DOUT → GPIO 40    HX711 SCK → GPIO 41
+AMS1117 3.3V → ESP32-S3 3.3V güç hattı
 ```
 
 > **Bu pin haritası `ESP32_Akilli_Dolap_FINAL.ino` içindeki gerçek konfigürasyondur.**
@@ -405,10 +410,10 @@ Inventory-Tracking-System/
 ├── 📊 DASHBOARD
 │   └── dashboard.py           # 1118 satır Streamlit premium UI
 │
-├── 📂 VERİ
-│   ├── urun_katalogu.json     # Ürün metadata + fiyat + kritik eşik
-│   ├── sistem_durumu.json     # Anlık stok durumu
-│   └── satis_gecmisi.csv      # Zaman damgalı satış geçmişi
+├── 📂 DATA
+│   ├── data/urun_katalogu.json     # Ürün metadata + fiyat + kritik eşik
+│   ├── data/sistem_durumu.json     # Anlık stok durumu
+│   └── data/satis_gecmisi.csv      # Zaman damgalı satış geçmişi
 │
 ├── 📚 DOCS
 │   ├── docs/BOM.xlsx          # Bill of Materials (donanım maliyet listesi)

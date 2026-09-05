@@ -72,8 +72,8 @@ app = Flask(__name__)
 ONCESI_YOLU     = "dolap_oncesi.jpg"       # Referans fotoğraf (sürekli güncellenir)
 SONRASI_YOLU    = "dolap_sonrasi.jpg"       # Yeni gelen fotoğraf
 SON_KAMERA_YOLU = "test_resmi.jpeg"         # Dashboard sidebar için
-JSON_DOSYASI    = "sistem_durumu.json"
-CSV_DOSYASI     = "satis_gecmisi.csv"
+JSON_DOSYASI    = "data/sistem_durumu.json"
+CSV_DOSYASI     = "data/satis_gecmisi.csv"
 
 # ==========================================
 # 4. YARDIMCI FONKSİYONLAR

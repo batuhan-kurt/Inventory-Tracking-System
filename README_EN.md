@@ -58,13 +58,13 @@ ORB Feature Matching →    OpenCV Slot Analysis    →    Live Operations Feed
 ## 🧠 How It Works — Step by Step
 
 ### 1️⃣ Weight-Based Hardware Trigger
-- The **HX711** load cell continuously measures shelf weight (sampling rate: 10 Hz).
-- A change of more than **50 grams** triggers the ESP32.
-- Since a typical beverage can weighs **230–290 grams**, this threshold filters out false alarms.
+- The **HX711** load cell continuously measures shelf weight (5-sample moving average for noise reduction).
+- A change of more than **85 grams** triggers the ESP32.
+- Since a typical beverage can weighs **230–290 grams**, this threshold filters out small vibrations.
 
 ### 2️⃣ Smart Image Capture
-- The ESP32-S3 uses the **OV5640 camera** with a **2-second stabilization delay** before capturing.
-- This prevents the customer's hand from appearing in the frame (motion blur protection).
+- The ESP32-S3 captures using the **OV5640 camera** after **8 warm-up frames + 150ms delay** (VGA 640×480).
+- This eliminates both hand-in-frame blur and sensor instability from the first frames.
 - The image is sent via **HTTP POST over Wi-Fi** to the Python server.
 
 ### 3️⃣ Image Alignment (ORB Feature Matching)
@@ -261,13 +261,17 @@ The dashboard has four pages and two UI modes (📱 Mobile / 💻 Web):
 | Component | Model | Qty | Notes |
 |---|---|---|---|
 | Microcontroller | ESP32-S3 | 1 | Built-in Wi-Fi + Bluetooth |
-| Camera | OV5640 (5MP) | 1 | Custom PCB pinout |
-| Load Cell Amplifier | HX711 | 1 | 24-bit ADC |
+| Camera | OV5640 (5MP, VGA 640×480) | 1 | Custom PCB pinout |
+| Load Cell Amplifier | HX711 | 1 | 24-bit ADC, 10 Hz sampling |
 | Load Cell | 1–5 kg | 1 | Based on shelf capacity |
+| Voltage Regulator | AMS1117 3.3V | 1 | ESP32-S3 power supply |
+| PCB | Custom / Ready-made | 1 | Camera + ESP32 integration |
+| Jumper Wire Set | — | — | Sensor connections |
 
 ### ESP32-S3 PCB Pin Map (OV5640)
 
 ```
+OV5640 Camera Pins:
 PWDN  → GPIO 21    RESET → GPIO 18    XCLK → GPIO 10
 SIOD  → GPIO 40    SIOC  → GPIO 39    VSYNC → GPIO 6
 HREF  → GPIO 7     PCLK  → GPIO 13
@@ -275,7 +279,8 @@ HREF  → GPIO 7     PCLK  → GPIO 13
 D0 → GPIO 11   D1 → GPIO 9    D2 → GPIO 8    D3 → GPIO 12
 D4 → GPIO 17   D5 → GPIO 16   D6 → GPIO 15   D7 → GPIO 14
 
-HX711 DOUT → GPIO 4    HX711 SCK → GPIO 5
+HX711 DOUT → GPIO 40    HX711 SCK → GPIO 41
+AMS1117 3.3V → ESP32-S3 3.3V power rail
 ```
 
 ---
@@ -404,9 +409,9 @@ Inventory-Tracking-System/
 │   └── dashboard.py           # 1118-line Streamlit premium UI
 │
 ├── 📂 DATA
-│   ├── urun_katalogu.json     # Product metadata + price + reorder threshold
-│   ├── sistem_durumu.json     # Live stock status
-│   └── satis_gecmisi.csv      # Timestamped sales history
+│   ├── data/urun_katalogu.json     # Product metadata + price + reorder threshold
+│   ├── data/sistem_durumu.json     # Live stock status
+│   └── data/satis_gecmisi.csv      # Timestamped sales history
 │
 ├── 📚 DOCS
 │   ├── docs/BOM.xlsx          # Bill of Materials

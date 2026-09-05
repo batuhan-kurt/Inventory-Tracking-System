@@ -318,9 +318,9 @@ def render_mobile_ui(icon, title, value, subtitle, list_data, comment_title, com
 # ==========================================
 # VERİ OKUMA VE HESAPLAMA
 # ==========================================
-JSON_DURUM  = "sistem_durumu.json"
-JSON_KATALOG = "urun_katalogu.json"
-CSV_GECMIS  = "satis_gecmisi.csv"
+JSON_DURUM  = "data/sistem_durumu.json"
+JSON_KATALOG = "data/urun_katalogu.json"
+CSV_GECMIS  = "data/satis_gecmisi.csv"
 RESIM_YOLU  = "dolap_oncesi.jpg"   # Gerçek dolap kamera görüntüsü
 
 try:
