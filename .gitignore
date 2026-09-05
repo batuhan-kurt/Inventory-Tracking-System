@@ -51,5 +51,6 @@ __pycache__/
 .vscode/
 .idea/
 
-# ── Bitirme Çıktıları (rapor üretim scriptleri) ────
+# ── Rapor Üretim Scriptleri (iç kullanım) ──────────
+python_raporlar/
 bitirme_ciktilari/
